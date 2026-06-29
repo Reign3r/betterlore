@@ -11,10 +11,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.maksy.itemlore.AnvilLoreMod"
+      "com.reign.itemlore.AnvilLoreMod"
     ],
     "client": [
-      "com.maksy.itemlore.client.AnvilLoreClient"
+      "com.reign.itemlore.client.AnvilLoreClient"
     ]
   },
   "mixins": [
