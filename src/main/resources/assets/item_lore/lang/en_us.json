@@ -1,0 +1,16 @@
+{
+  "gui.item_lore.button": "Lore",
+  "gui.item_lore.done": "Done",
+  "gui.item_lore.editor": "Item lore",
+  "gui.item_lore.placeholder": "Type lore here...",
+  "gui.item_lore.symbols": "%s / %s symbols",
+  "gui.item_lore.title": "Lore",
+  "gui.item_lore.cost": "+1 level",
+  "gui.item_lore.hint": "Use [color:#b8860b]text[/color]. Gradient button inserts a template.",
+  "gui.item_lore.color_helper": "Color helper",
+  "gui.item_lore.color_preview": "Minecraft",
+  "gui.item_lore.hex": "Hex: %s",
+  "gui.item_lore.copy_hex": "Copy %s",
+  "gui.item_lore.insert_color": "Insert color",
+  "gui.item_lore.insert_gradient": "Insert gradient"
+}
