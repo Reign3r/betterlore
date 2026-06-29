@@ -57,6 +57,29 @@ class LoreMarkupParserTest {
 	}
 
 	@Test
+	void formattingTagsApplyFlagsWithoutCountingAsVisibleSymbols() {
+		ParseResult result = LoreMarkupParser.parse("[b][u]Marked[/u][/b]");
+
+		assertTrue(result.isSuccess());
+		assertEquals(6, result.visibleCodePoints());
+		LoreRun run = result.document().lines().getFirst().runs().getFirst();
+		assertEquals("Marked", run.text());
+		assertTrue(run.bold());
+		assertTrue(run.underlined());
+	}
+
+	@Test
+	void gradientCanInheritFormattingTags() {
+		ParseResult result = LoreMarkupParser.parse("[o][gradient:#ff0000]ABC[/gradient:#0000ff][/o]");
+
+		assertTrue(result.isSuccess());
+		assertEquals(3, result.visibleCodePoints());
+		assertTrue(result.document().lines().getFirst().runs().getFirst().obfuscated());
+		assertEquals(0xFF0000, result.document().lines().getFirst().runs().getFirst().rgb());
+		assertEquals(0x0000FF, result.document().lines().getFirst().runs().getLast().rgb());
+	}
+
+	@Test
 	void countsEmojiAsOneCodePoint() {
 		ParseResult result = LoreMarkupParser.parse("A \uD83D\uDD25 B");
 

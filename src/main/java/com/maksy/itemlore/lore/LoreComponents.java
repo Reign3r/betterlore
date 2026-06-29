@@ -87,12 +87,7 @@ public final class LoreComponents {
 				continue;
 			}
 
-			Style style = Style.EMPTY.withItalic(false);
-			if (run.rgb() != LoreMarkupParser.DEFAULT_COLOR) {
-				style = style.withColor(TextColor.fromRgb(run.rgb()));
-			}
-
-			root.append(Component.literal(run.text()).withStyle(style));
+			root.append(Component.literal(run.text()).withStyle(styleForRun(run, false)));
 		}
 
 		return root;
@@ -106,14 +101,25 @@ public final class LoreComponents {
 				continue;
 			}
 
-			Style style = Style.EMPTY
-					.withColor(TextColor.fromRgb(run.rgb()))
-					.withItalic(false);
-
-			root.append(Component.literal(run.text()).withStyle(style));
+			root.append(Component.literal(run.text()).withStyle(styleForRun(run, true)));
 		}
 
 		return root;
+	}
+
+	private static Style styleForRun(LoreRun run, boolean forceLoreColor) {
+		Style style = Style.EMPTY
+				.withItalic(run.italic())
+				.withBold(run.bold())
+				.withUnderlined(run.underlined())
+				.withStrikethrough(run.strikethrough())
+				.withObfuscated(run.obfuscated());
+
+		if (forceLoreColor || run.rgb() != LoreMarkupParser.DEFAULT_COLOR) {
+			style = style.withColor(TextColor.fromRgb(run.rgb()));
+		}
+
+		return style;
 	}
 
 	private static List<LoreLine> hardWrap(LoreDocument document) {
@@ -125,7 +131,7 @@ public final class LoreComponents {
 	}
 
 	private static List<LoreLine> hardWrapLine(LoreLine line) {
-		List<ColoredCodePoint> codePoints = toColoredCodePoints(line);
+		List<StyledCodePoint> codePoints = toStyledCodePoints(line);
 		if (codePoints.size() <= LoreMarkupParser.WRAP_VISIBLE_CHARS) {
 			return List.of(line);
 		}
@@ -164,40 +170,42 @@ public final class LoreComponents {
 		return List.copyOf(wrapped);
 	}
 
-	private static List<ColoredCodePoint> toColoredCodePoints(LoreLine line) {
-		List<ColoredCodePoint> codePoints = new ArrayList<>();
+	private static List<StyledCodePoint> toStyledCodePoints(LoreLine line) {
+		List<StyledCodePoint> codePoints = new ArrayList<>();
 		for (LoreRun run : line.runs()) {
 			for (int i = 0; i < run.text().length();) {
 				int cp = run.text().codePointAt(i);
-				codePoints.add(new ColoredCodePoint(cp, run.rgb()));
+				codePoints.add(new StyledCodePoint(cp, run.rgb(), run.flags()));
 				i += Character.charCount(cp);
 			}
 		}
 		return codePoints;
 	}
 
-	private static LoreLine toLine(List<ColoredCodePoint> codePoints, int start, int end) {
+	private static LoreLine toLine(List<StyledCodePoint> codePoints, int start, int end) {
 		List<LoreRun> runs = new ArrayList<>();
 		StringBuilder text = new StringBuilder();
 		int color = codePoints.get(start).rgb();
+		int flags = codePoints.get(start).flags();
 
 		for (int i = start; i < end; i++) {
-			ColoredCodePoint cp = codePoints.get(i);
-			if (cp.rgb() != color) {
-				runs.add(new LoreRun(text.toString(), color));
+			StyledCodePoint cp = codePoints.get(i);
+			if (cp.rgb() != color || cp.flags() != flags) {
+				runs.add(new LoreRun(text.toString(), color, flags));
 				text.setLength(0);
 				color = cp.rgb();
+				flags = cp.flags();
 			}
 			text.appendCodePoint(cp.codePoint());
 		}
 
 		if (!text.isEmpty()) {
-			runs.add(new LoreRun(text.toString(), color));
+			runs.add(new LoreRun(text.toString(), color, flags));
 		}
 
 		return new LoreLine(runs);
 	}
 
-	private record ColoredCodePoint(int codePoint, int rgb) {
+	private record StyledCodePoint(int codePoint, int rgb, int flags) {
 	}
 }

@@ -78,13 +78,48 @@ public final class LoreMarkupDecompiler {
 
 		TextColor color = style.getColor();
 		boolean colored = color != null && color.getValue() != LoreMarkupParser.DEFAULT_COLOR;
+		boolean bold = style.isBold();
+		boolean italic = style.isItalic();
+		boolean underlined = style.isUnderlined();
+		boolean strikethrough = style.isStrikethrough();
+		boolean obfuscated = style.isObfuscated();
 
 		if (colored) {
 			markup.append("[color:").append(LoreMarkupParser.formatHex(color.getValue())).append(']');
 		}
+		if (bold) {
+			markup.append("[b]");
+		}
+		if (italic) {
+			markup.append("[i]");
+		}
+		if (underlined) {
+			markup.append("[u]");
+		}
+		if (strikethrough) {
+			markup.append("[s]");
+		}
+		if (obfuscated) {
+			markup.append("[o]");
+		}
 
 		appendEscaped(markup, text);
 
+		if (obfuscated) {
+			markup.append("[/o]");
+		}
+		if (strikethrough) {
+			markup.append("[/s]");
+		}
+		if (underlined) {
+			markup.append("[/u]");
+		}
+		if (italic) {
+			markup.append("[/i]");
+		}
+		if (bold) {
+			markup.append("[/b]");
+		}
 		if (colored) {
 			markup.append("[/color]");
 		}

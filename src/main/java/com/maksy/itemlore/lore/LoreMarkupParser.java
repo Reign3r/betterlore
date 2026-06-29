@@ -17,6 +17,14 @@ public final class LoreMarkupParser {
 	private static final String GRADIENT_OPEN_PREFIX = "[gradient:#";
 	private static final String GRADIENT_CLOSE_PREFIX = "[/gradient:#";
 
+	private static final String[][] FORMAT_TAGS = new String[][]{
+			{"b", "bold", String.valueOf(LoreRun.BOLD)},
+			{"i", "italic", String.valueOf(LoreRun.ITALIC)},
+			{"u", "underline", String.valueOf(LoreRun.UNDERLINED)},
+			{"s", "strikethrough", String.valueOf(LoreRun.STRIKETHROUGH)},
+			{"o", "obfuscated", String.valueOf(LoreRun.OBFUSCATED)}
+	};
+
 	private LoreMarkupParser() {
 	}
 
@@ -62,6 +70,11 @@ public final class LoreMarkupParser {
 		private final StringBuilder currentText = new StringBuilder();
 		private int visible;
 		private int tagCount;
+		private int boldDepth;
+		private int italicDepth;
+		private int underlinedDepth;
+		private int strikethroughDepth;
+		private int obfuscatedDepth;
 
 		private ParserState(String input) {
 			this.input = input;
@@ -72,7 +85,7 @@ public final class LoreMarkupParser {
 			for (int i = 0; i < input.length();) {
 				ColorTag colorTag = readColorOpen(input, i);
 				if (colorTag != null) {
-					flushRun(currentColor());
+					flushRun(currentColor(), currentFlags());
 					colorStack.add(colorTag.rgb());
 					ParseResult error = countTag();
 					if (error != null) {
@@ -83,7 +96,7 @@ public final class LoreMarkupParser {
 				}
 
 				if (startsWithIgnoreCase(input, i, COLOR_CLOSE)) {
-					flushRun(currentColor());
+					flushRun(currentColor(), currentFlags());
 					if (colorStack.size() > 1) {
 						colorStack.remove(colorStack.size() - 1);
 					}
@@ -99,7 +112,7 @@ public final class LoreMarkupParser {
 				if (gradientOpen != null) {
 					GradientClose gradientClose = findGradientClose(input, gradientOpen.endIndex());
 					if (gradientClose != null) {
-						flushRun(currentColor());
+						flushRun(currentColor(), currentFlags());
 						ParseResult error = countTag();
 						if (error != null) {
 							return error;
@@ -110,7 +123,7 @@ public final class LoreMarkupParser {
 						}
 
 						String gradientText = input.substring(gradientOpen.endIndex(), gradientClose.startIndex());
-						error = appendGradient(gradientText, gradientOpen.rgb(), gradientClose.rgb());
+						error = appendGradient(gradientText, gradientOpen.rgb(), gradientClose.rgb(), currentFlags());
 						if (error != null) {
 							return error;
 						}
@@ -119,19 +132,31 @@ public final class LoreMarkupParser {
 					}
 				}
 
-				AppendResult result = appendLiteralAt(input, i, currentColor());
+				FormatTag formatTag = readFormatTag(input, i);
+				if (formatTag != null) {
+					flushRun(currentColor(), currentFlags());
+					applyFormatTag(formatTag);
+					ParseResult error = countTag();
+					if (error != null) {
+						return error;
+					}
+					i = formatTag.endIndex();
+					continue;
+				}
+
+				AppendResult result = appendLiteralAt(input, i, currentColor(), currentFlags());
 				if (result.error() != null) {
 					return result.error();
 				}
 				i = result.nextIndex();
 			}
 
-			flushRun(currentColor());
+			flushRun(currentColor(), currentFlags());
 			lines.add(new LoreLine(List.copyOf(currentRuns)));
 			return null;
 		}
 
-		private ParseResult appendGradient(String text, int startColor, int endColor) {
+		private ParseResult appendGradient(String text, int startColor, int endColor, int flags) {
 			List<Integer> codePoints = new ArrayList<>();
 			int gradientVisible = 0;
 
@@ -165,7 +190,7 @@ public final class LoreMarkupParser {
 					continue;
 				}
 
-				appendCodePoint(cp, interpolateColor(startColor, endColor, gradientIndex, visibleInGradient));
+				appendCodePoint(cp, interpolateColor(startColor, endColor, gradientIndex, visibleInGradient), flags);
 				visible++;
 				gradientIndex++;
 			}
@@ -173,13 +198,13 @@ public final class LoreMarkupParser {
 			return null;
 		}
 
-		private AppendResult appendLiteralAt(String source, int index, int color) {
+		private AppendResult appendLiteralAt(String source, int index, int color, int flags) {
 			if (source.startsWith("\\[", index)) {
-				return appendVisibleCodePoint('[', index + 2, color);
+				return appendVisibleCodePoint('[', index + 2, color, flags);
 			}
 
 			if (source.startsWith("\\\\", index)) {
-				return appendVisibleCodePoint('\\', index + 2, color);
+				return appendVisibleCodePoint('\\', index + 2, color, flags);
 			}
 
 			char ch = source.charAt(index);
@@ -199,7 +224,7 @@ public final class LoreMarkupParser {
 
 			if (cp == '\t') {
 				for (int i = 0; i < 4; i++) {
-					ParseResult error = appendVisibleCodePoint(' ', nextIndex, color).error();
+					ParseResult error = appendVisibleCodePoint(' ', nextIndex, color, flags).error();
 					if (error != null) {
 						return new AppendResult(nextIndex, error);
 					}
@@ -215,11 +240,11 @@ public final class LoreMarkupParser {
 				return new AppendResult(nextIndex, ParseResult.error("Control characters are not allowed.", visible));
 			}
 
-			return appendVisibleCodePoint(cp, nextIndex, color);
+			return appendVisibleCodePoint(cp, nextIndex, color, flags);
 		}
 
-		private AppendResult appendVisibleCodePoint(int cp, int nextIndex, int color) {
-			appendCodePoint(cp, color);
+		private AppendResult appendVisibleCodePoint(int cp, int nextIndex, int color, int flags) {
+			appendCodePoint(cp, color, flags);
 			visible++;
 			if (visible > MAX_VISIBLE_CODEPOINTS) {
 				return new AppendResult(nextIndex, ParseResult.error("Lore is limited to 255 visible symbols.", visible));
@@ -227,12 +252,12 @@ public final class LoreMarkupParser {
 			return new AppendResult(nextIndex, null);
 		}
 
-		private void appendCodePoint(int cp, int color) {
+		private void appendCodePoint(int cp, int color, int flags) {
 			currentText.appendCodePoint(cp);
-			flushRun(color);
+			flushRun(color, flags);
 		}
 
-		private void flushRun(int color) {
+		private void flushRun(int color, int flags) {
 			if (currentText.isEmpty()) {
 				return;
 			}
@@ -240,19 +265,19 @@ public final class LoreMarkupParser {
 			String value = currentText.toString();
 			if (!currentRuns.isEmpty()) {
 				LoreRun previous = currentRuns.getLast();
-				if (previous.rgb() == color) {
-					currentRuns.set(currentRuns.size() - 1, new LoreRun(previous.text() + value, color));
+				if (previous.rgb() == color && previous.flags() == flags) {
+					currentRuns.set(currentRuns.size() - 1, new LoreRun(previous.text() + value, color, flags));
 					currentText.setLength(0);
 					return;
 				}
 			}
 
-			currentRuns.add(new LoreRun(value, color));
+			currentRuns.add(new LoreRun(value, color, flags));
 			currentText.setLength(0);
 		}
 
 		private ParseResult addLineBreak() {
-			flushRun(currentColor());
+			flushRun(currentColor(), currentFlags());
 			lines.add(new LoreLine(List.copyOf(currentRuns)));
 			currentRuns.clear();
 
@@ -263,16 +288,49 @@ public final class LoreMarkupParser {
 			return null;
 		}
 
+		private void applyFormatTag(FormatTag tag) {
+			int delta = tag.open() ? 1 : -1;
+			switch (tag.flag()) {
+				case LoreRun.BOLD -> boldDepth = Math.max(0, boldDepth + delta);
+				case LoreRun.ITALIC -> italicDepth = Math.max(0, italicDepth + delta);
+				case LoreRun.UNDERLINED -> underlinedDepth = Math.max(0, underlinedDepth + delta);
+				case LoreRun.STRIKETHROUGH -> strikethroughDepth = Math.max(0, strikethroughDepth + delta);
+				case LoreRun.OBFUSCATED -> obfuscatedDepth = Math.max(0, obfuscatedDepth + delta);
+				default -> {
+				}
+			}
+		}
+
 		private ParseResult countTag() {
 			tagCount++;
 			if (tagCount > MAX_COLOR_TAGS) {
-				return ParseResult.error("Too many color or gradient tags.", visible);
+				return ParseResult.error("Too many markup tags.", visible);
 			}
 			return null;
 		}
 
 		private int currentColor() {
 			return colorStack.getLast();
+		}
+
+		private int currentFlags() {
+			int flags = 0;
+			if (boldDepth > 0) {
+				flags |= LoreRun.BOLD;
+			}
+			if (italicDepth > 0) {
+				flags |= LoreRun.ITALIC;
+			}
+			if (underlinedDepth > 0) {
+				flags |= LoreRun.UNDERLINED;
+			}
+			if (strikethroughDepth > 0) {
+				flags |= LoreRun.STRIKETHROUGH;
+			}
+			if (obfuscatedDepth > 0) {
+				flags |= LoreRun.OBFUSCATED;
+			}
+			return flags;
 		}
 
 		private LoreDocument buildDocument() {
@@ -382,6 +440,40 @@ public final class LoreMarkupParser {
 		return null;
 	}
 
+	private static FormatTag readFormatTag(String s, int index) {
+		for (String[] tag : FORMAT_TAGS) {
+			String shortName = tag[0];
+			String longName = tag[1];
+			int flag = Integer.parseInt(tag[2]);
+
+			FormatTag shortTag = readSpecificFormatTag(s, index, shortName, flag);
+			if (shortTag != null) {
+				return shortTag;
+			}
+
+			FormatTag longTag = readSpecificFormatTag(s, index, longName, flag);
+			if (longTag != null) {
+				return longTag;
+			}
+		}
+
+		return null;
+	}
+
+	private static FormatTag readSpecificFormatTag(String s, int index, String name, int flag) {
+		String open = "[" + name + "]";
+		if (startsWithIgnoreCase(s, index, open)) {
+			return new FormatTag(flag, true, index + open.length());
+		}
+
+		String close = "[/" + name + "]";
+		if (startsWithIgnoreCase(s, index, close)) {
+			return new FormatTag(flag, false, index + close.length());
+		}
+
+		return null;
+	}
+
 	private static boolean hasSixHexDigits(String s, int start) {
 		if (start + 6 > s.length()) {
 			return false;
@@ -423,5 +515,8 @@ public final class LoreMarkupParser {
 	}
 
 	private record GradientLiteral(List<Integer> codePoints, int nextIndex, String error) {
+	}
+
+	private record FormatTag(int flag, boolean open, int endIndex) {
 	}
 }
