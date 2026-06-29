@@ -1,5 +1,6 @@
 package com.maksy.itemlore.lore;
 
+import com.maksy.itemlore.ModDataComponents;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.Style;
@@ -14,6 +15,15 @@ public final class LoreMarkupDecompiler {
 	}
 
 	public static String toSafeMarkup(ItemStack stack) {
+		return toSafeLoreMarkup(stack);
+	}
+
+	public static String toSafeLoreMarkup(ItemStack stack) {
+		String rawMarkup = stack.get(ModDataComponents.RAW_LORE_MARKUP);
+		if (isValidLoreMarkup(rawMarkup)) {
+			return rawMarkup;
+		}
+
 		ItemLore lore = stack.get(DataComponents.LORE);
 		if (lore == null || lore.lines().isEmpty()) {
 			return "";
@@ -24,14 +34,38 @@ public final class LoreMarkupDecompiler {
 			if (i > 0) {
 				markup.append('\n');
 			}
-			appendLine(markup, lore.lines().get(i));
+			appendComponent(markup, lore.lines().get(i));
 		}
 
 		return markup.toString();
 	}
 
-	private static void appendLine(StringBuilder markup, Component line) {
-		line.visit((style, text) -> {
+	public static String toSafeNameMarkup(ItemStack stack) {
+		String rawMarkup = stack.get(ModDataComponents.RAW_NAME_MARKUP);
+		if (isValidNameMarkup(rawMarkup)) {
+			return rawMarkup;
+		}
+
+		Component customName = stack.get(DataComponents.CUSTOM_NAME);
+		if (customName == null) {
+			return "";
+		}
+
+		StringBuilder markup = new StringBuilder();
+		appendComponent(markup, customName);
+		return markup.toString();
+	}
+
+	private static boolean isValidLoreMarkup(String rawMarkup) {
+		return rawMarkup != null && LoreMarkupParser.parse(rawMarkup).isSuccess();
+	}
+
+	private static boolean isValidNameMarkup(String rawMarkup) {
+		return rawMarkup != null && LoreMarkupParser.parseName(rawMarkup).isSuccess();
+	}
+
+	private static void appendComponent(StringBuilder markup, Component component) {
+		component.visit((style, text) -> {
 			appendSegment(markup, style, text);
 			return Optional.empty();
 		}, Style.EMPTY);

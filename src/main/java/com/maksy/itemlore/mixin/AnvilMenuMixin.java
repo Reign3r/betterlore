@@ -9,6 +9,7 @@ import com.maksy.itemlore.lore.ParseResult;
 import com.maksy.itemlore.net.ClientboundAnvilLoreStatePayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AnvilMenu;
@@ -39,13 +40,28 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 	private int itemLore$sessionId = 0;
 
 	@Unique
-	private boolean itemLore$hasClientEdit = false;
+	private boolean itemLore$hasClientLoreEdit = false;
 
 	@Unique
-	private boolean itemLore$lastParseValid = true;
+	private boolean itemLore$lastLoreParseValid = true;
 
 	@Unique
-	private LoreDocument itemLore$document = LoreDocument.empty();
+	private String itemLore$rawLoreMarkup = "";
+
+	@Unique
+	private LoreDocument itemLore$loreDocument = LoreDocument.empty();
+
+	@Unique
+	private boolean itemLore$hasClientNameEdit = false;
+
+	@Unique
+	private boolean itemLore$lastNameParseValid = true;
+
+	@Unique
+	private String itemLore$rawNameMarkup = "";
+
+	@Unique
+	private LoreDocument itemLore$nameDocument = LoreDocument.empty();
 
 	@Unique
 	private ItemStack itemLore$lastLeftStack = ItemStack.EMPTY;
@@ -63,9 +79,14 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 
 		itemLore$lastLeftStack = currentLeft.copy();
 		itemLore$sessionId++;
-		itemLore$hasClientEdit = false;
-		itemLore$lastParseValid = true;
-		itemLore$document = LoreDocument.empty();
+		itemLore$hasClientLoreEdit = false;
+		itemLore$lastLoreParseValid = true;
+		itemLore$rawLoreMarkup = "";
+		itemLore$loreDocument = LoreDocument.empty();
+		itemLore$hasClientNameEdit = false;
+		itemLore$lastNameParseValid = true;
+		itemLore$rawNameMarkup = "";
+		itemLore$nameDocument = LoreDocument.empty();
 
 		if (player instanceof ServerPlayer serverPlayer && ServerPlayNetworking.canSend(serverPlayer, ClientboundAnvilLoreStatePayload.TYPE)) {
 			ServerPlayNetworking.send(
@@ -73,15 +94,16 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 					new ClientboundAnvilLoreStatePayload(
 							((AnvilMenu) (Object) this).containerId,
 							itemLore$sessionId,
-							LoreMarkupDecompiler.toSafeMarkup(currentLeft)
+							LoreMarkupDecompiler.toSafeLoreMarkup(currentLeft),
+							LoreMarkupDecompiler.toSafeNameMarkup(currentLeft)
 					)
 			);
 		}
 	}
 
 	@Inject(method = "createResult", at = @At("TAIL"))
-	private void itemLore$applyLoreResult(CallbackInfo ci) {
-		if (!itemLore$hasClientEdit) {
+	private void itemLore$applyTextResult(CallbackInfo ci) {
+		if (!itemLore$hasClientLoreEdit && !itemLore$hasClientNameEdit) {
 			return;
 		}
 
@@ -90,7 +112,7 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 			return;
 		}
 
-		if (!itemLore$lastParseValid) {
+		if (!itemLore$lastLoreParseValid || !itemLore$lastNameParseValid) {
 			resultSlots.setItem(0, ItemStack.EMPTY);
 			cost.set(0);
 			((AnvilMenu) (Object) this).broadcastChanges();
@@ -104,20 +126,50 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 			return;
 		}
 
-		boolean loreChanged = !LoreComponents.equivalentToExistingLore(
+		boolean loreChanged = itemLore$hasClientLoreEdit && !LoreComponents.equivalentToExistingLore(
 				left.get(DataComponents.LORE),
-				itemLore$document
+				itemLore$loreDocument
 		);
+		boolean nameChanged = itemLore$hasClientNameEdit && !LoreComponents.equivalentToExistingName(
+				left.get(DataComponents.CUSTOM_NAME),
+				itemLore$nameDocument
+		);
+		boolean vanillaAppliedRawName = itemLore$hasClientNameEdit
+				&& itemLore$vanillaAlreadyAppliedRequestedName(vanillaOutput, itemLore$rawNameMarkup);
 
-		if (!loreChanged) {
+		if (!loreChanged && !nameChanged && !vanillaAppliedRawName) {
+			return;
+		}
+
+		if (!loreChanged && !nameChanged && vanillaAppliedRawName && right.isEmpty()) {
+			resultSlots.setItem(0, ItemStack.EMPTY);
+			cost.set(0);
+			((AnvilMenu) (Object) this).broadcastChanges();
 			return;
 		}
 
 		ItemStack output = vanillaOutput.isEmpty() ? left.copy() : vanillaOutput.copy();
-		LoreComponents.applyTo(output, itemLore$document);
-
 		int baseCost = Math.max(0, cost.get());
-		cost.set(baseCost + 1);
+		int extraCost = 0;
+
+		if (vanillaAppliedRawName && !nameChanged) {
+			baseCost = Math.max(0, baseCost - 1);
+			LoreComponents.applyNameTo(output, itemLore$rawNameMarkup, itemLore$nameDocument);
+		}
+
+		if (nameChanged) {
+			LoreComponents.applyNameTo(output, itemLore$rawNameMarkup, itemLore$nameDocument);
+			if (!vanillaAppliedRawName) {
+				extraCost++;
+			}
+		}
+
+		if (loreChanged) {
+			LoreComponents.applyTo(output, itemLore$rawLoreMarkup, itemLore$loreDocument);
+			extraCost++;
+		}
+
+		cost.set(baseCost + extraCost);
 		resultSlots.setItem(0, output);
 		((AnvilMenu) (Object) this).broadcastChanges();
 	}
@@ -128,10 +180,41 @@ public abstract class AnvilMenuMixin extends ItemCombinerMenu implements AnvilLo
 			return;
 		}
 
-		ParseResult result = LoreMarkupParser.parse(rawLoreMarkup);
-		itemLore$hasClientEdit = true;
-		itemLore$lastParseValid = result.isSuccess();
-		itemLore$document = result.isSuccess() ? result.document() : LoreDocument.empty();
+		String raw = rawLoreMarkup == null ? "" : rawLoreMarkup;
+		ParseResult result = LoreMarkupParser.parse(raw);
+		itemLore$hasClientLoreEdit = true;
+		itemLore$lastLoreParseValid = result.isSuccess();
+		itemLore$rawLoreMarkup = raw;
+		itemLore$loreDocument = result.isSuccess() ? result.document() : LoreDocument.empty();
 		createResult();
+	}
+
+	@Override
+	public void itemLore$handleClientNameUpdate(int sessionId, String rawNameMarkup) {
+		if (sessionId != itemLore$sessionId) {
+			return;
+		}
+
+		String raw = rawNameMarkup == null ? "" : rawNameMarkup;
+		ParseResult result = LoreMarkupParser.parseName(raw);
+		itemLore$hasClientNameEdit = true;
+		itemLore$lastNameParseValid = result.isSuccess();
+		itemLore$rawNameMarkup = raw;
+		itemLore$nameDocument = result.isSuccess() ? result.document() : LoreDocument.empty();
+		createResult();
+	}
+
+	@Unique
+	private boolean itemLore$vanillaAlreadyAppliedRequestedName(ItemStack vanillaOutput, String rawNameMarkup) {
+		if (vanillaOutput.isEmpty()) {
+			return false;
+		}
+
+		Component customName = vanillaOutput.get(DataComponents.CUSTOM_NAME);
+		if (rawNameMarkup == null || rawNameMarkup.isEmpty()) {
+			return customName == null;
+		}
+
+		return customName != null && rawNameMarkup.equals(customName.getString());
 	}
 }

@@ -38,6 +38,18 @@ public final class LoreMarkupParser {
 		return ParseResult.success(state.buildDocument());
 	}
 
+	public static ParseResult parseName(String raw) {
+		if (raw == null || raw.isEmpty()) {
+			return ParseResult.success(LoreDocument.empty());
+		}
+
+		String oneLine = raw
+				.replace("\r\n", " ")
+				.replace('\r', ' ')
+				.replace('\n', ' ');
+		return parse(oneLine);
+	}
+
 	public static String formatHex(int rgb) {
 		return String.format(Locale.ROOT, "#%06x", rgb & 0xFFFFFF);
 	}

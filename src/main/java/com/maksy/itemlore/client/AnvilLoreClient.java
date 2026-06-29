@@ -24,7 +24,7 @@ public final class AnvilLoreClient implements ClientModInitializer {
 		}
 
 		if (screen instanceof AnvilLoreScreenBridge bridge) {
-			bridge.itemLore$acceptServerLoreState(payload.containerId(), payload.sessionId(), payload.safeExistingLoreMarkup());
+			bridge.itemLore$acceptServerLoreState(payload.containerId(), payload.sessionId(), payload.safeExistingLoreMarkup(), payload.safeExistingNameMarkup());
 		}
 	}
 }

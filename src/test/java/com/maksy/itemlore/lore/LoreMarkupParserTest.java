@@ -65,6 +65,25 @@ class LoreMarkupParserTest {
 	}
 
 	@Test
+	void parseNameUsesSameColorAndGradientMarkupOnOneLine() {
+		ParseResult result = LoreMarkupParser.parseName("[gradient:#a6c2ff]Interesting...[/gradient:#4651ff]");
+
+		assertTrue(result.isSuccess());
+		assertEquals(14, result.visibleCodePoints());
+		assertEquals(0xA6C2FF, result.document().lines().getFirst().runs().getFirst().rgb());
+		assertEquals(0x4651FF, result.document().lines().getFirst().runs().getLast().rgb());
+	}
+
+	@Test
+	void parseNameReplacesManualLineBreaksWithSpaces() {
+		ParseResult result = LoreMarkupParser.parseName("First\nSecond");
+
+		assertTrue(result.isSuccess());
+		assertEquals(12, result.visibleCodePoints());
+		assertEquals("First Second", result.document().lines().getFirst().runs().getFirst().text());
+	}
+
+	@Test
 	void rejectsLegacySectionFormatting() {
 		ParseResult result = LoreMarkupParser.parse("Bad \u00A7cRed");
 

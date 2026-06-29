@@ -1,5 +1,6 @@
 package com.maksy.itemlore.lore;
 
+import com.maksy.itemlore.ModDataComponents;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
@@ -16,14 +17,35 @@ public final class LoreComponents {
 	}
 
 	public static void applyTo(ItemStack stack, LoreDocument document) {
+		applyTo(stack, null, document);
+	}
+
+	public static void applyTo(ItemStack stack, String rawMarkup, LoreDocument document) {
 		List<Component> components = toComponents(document);
 
 		if (components.isEmpty()) {
 			stack.remove(DataComponents.LORE);
+			stack.remove(ModDataComponents.RAW_LORE_MARKUP);
 			return;
 		}
 
 		stack.set(DataComponents.LORE, new ItemLore(components));
+		if (rawMarkup != null) {
+			stack.set(ModDataComponents.RAW_LORE_MARKUP, rawMarkup);
+		}
+	}
+
+	public static void applyNameTo(ItemStack stack, String rawMarkup, LoreDocument document) {
+		if (document.isEmpty()) {
+			stack.remove(DataComponents.CUSTOM_NAME);
+			stack.remove(ModDataComponents.RAW_NAME_MARKUP);
+			return;
+		}
+
+		stack.set(DataComponents.CUSTOM_NAME, toNameComponent(document));
+		if (rawMarkup != null) {
+			stack.set(ModDataComponents.RAW_NAME_MARKUP, rawMarkup);
+		}
 	}
 
 	public static boolean equivalentToExistingLore(ItemLore existingLore, LoreDocument document) {
@@ -31,10 +53,49 @@ public final class LoreComponents {
 		return existing.equals(toComponents(document));
 	}
 
+	public static boolean equivalentToExistingName(Component existingName, LoreDocument document) {
+		if (existingName == null) {
+			return document.isEmpty();
+		}
+		return existingName.equals(toNameComponent(document));
+	}
+
 	public static List<Component> toComponents(LoreDocument document) {
 		return hardWrap(document).stream()
 				.map(LoreComponents::lineToComponent)
 				.toList();
+	}
+
+	public static Component toNameComponent(LoreDocument document) {
+		MutableComponent root = Component.empty();
+		boolean firstLine = true;
+		for (LoreLine line : document.lines()) {
+			if (!firstLine) {
+				root.append(Component.literal(" ").withStyle(Style.EMPTY.withItalic(false)));
+			}
+			root.append(nameLineToComponent(line));
+			firstLine = false;
+		}
+		return root;
+	}
+
+	private static Component nameLineToComponent(LoreLine line) {
+		MutableComponent root = Component.empty();
+
+		for (LoreRun run : line.runs()) {
+			if (run.text().isEmpty()) {
+				continue;
+			}
+
+			Style style = Style.EMPTY.withItalic(false);
+			if (run.rgb() != LoreMarkupParser.DEFAULT_COLOR) {
+				style = style.withColor(TextColor.fromRgb(run.rgb()));
+			}
+
+			root.append(Component.literal(run.text()).withStyle(style));
+		}
+
+		return root;
 	}
 
 	private static Component lineToComponent(LoreLine line) {

@@ -8,6 +8,7 @@ public final class AnvilLoreMod implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+		ModDataComponents.register();
 		AnvilLoreNetworking.registerPayloads();
 		AnvilLoreNetworking.registerServerReceiver();
 	}

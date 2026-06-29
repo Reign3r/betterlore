@@ -5,6 +5,7 @@ import com.maksy.itemlore.client.ColorValueSlider;
 import com.maksy.itemlore.lore.LoreMarkupParser;
 import com.maksy.itemlore.lore.ParseResult;
 import com.maksy.itemlore.net.ServerboundAnvilLoreUpdatePayload;
+import com.maksy.itemlore.net.ServerboundAnvilNameUpdatePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.Button;
@@ -33,7 +34,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	@Unique
 	private static final int itemLore$MIN_PANEL_WIDTH = 166;
 	@Unique
-	private static final int itemLore$PANEL_GAP = 6;
+	private static final int itemLore$PANEL_GAP = 10;
 	@Unique
 	private static final int itemLore$SCREEN_MARGIN = 6;
 	@Unique
@@ -48,7 +49,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	@Unique
 	private static final int itemLore$VANILLA_PANEL_DARK = 0xFF555555;
 	@Unique
-	private static final int itemLore$VANILLA_PANEL_SHADOW = 0xFF000000;
+	private static final int itemLore$VANILLA_PANEL_SHADOW = 0xFF3A3A3A;
 	@Unique
 	private static final int itemLore$VANILLA_TEXT = 0xFF404040;
 	@Unique
@@ -99,6 +100,18 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	private int itemLore$pickerGreen = 102;
 	@Unique
 	private int itemLore$pickerBlue = 0;
+	@Unique
+	private String itemLore$lastObservedName = "";
+	@Unique
+	private String itemLore$lastSentName = "";
+	@Unique
+	private boolean itemLore$nameDirty = false;
+	@Unique
+	private boolean itemLore$suppressNameSync = false;
+	@Unique
+	private int itemLore$nameSendDelay = 0;
+	@Unique
+	private int itemLore$nameStateGraceTicks = 0;
 
 	private AnvilScreenMixin(AnvilMenu menu, Inventory inventory, Component title, Identifier menuResource) {
 		super(menu, inventory, title, menuResource);
@@ -159,6 +172,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		addRenderableWidget(itemLore$insertColorButton);
 		addRenderableWidget(itemLore$insertGradientButton);
 
+		itemLore$configureNameField();
 		itemLore$setEditorValue(itemLore$raw, false);
 		itemLore$layoutLoreWidgets();
 		itemLore$updateColorButtons();
@@ -166,6 +180,8 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 	@Inject(method = "containerTick", at = @At("TAIL"))
 	private void itemLore$tickLoreSender(CallbackInfo ci) {
+		itemLore$tickNameSender();
+
 		if (itemLore$sendDelay > 0) {
 			itemLore$sendDelay--;
 		}
@@ -261,7 +277,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	}
 
 	@Override
-	public void itemLore$acceptServerLoreState(int containerId, int sessionId, String rawLoreMarkup) {
+	public void itemLore$acceptServerLoreState(int containerId, int sessionId, String rawLoreMarkup, String rawNameMarkup) {
 		if (containerId != menu.containerId) {
 			return;
 		}
@@ -271,10 +287,88 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			itemLore$setEditorValue(rawLoreMarkup, false);
 			itemLore$dirty = false;
 			itemLore$sendDelay = 0;
+		} else {
+			itemLore$sessionId = sessionId;
+		}
+
+		itemLore$acceptServerNameState(rawNameMarkup);
+	}
+
+	@Unique
+	private void itemLore$configureNameField() {
+		if (name == null) {
 			return;
 		}
 
-		itemLore$sessionId = sessionId;
+		name.setMaxLength(LoreMarkupParser.MAX_RAW_CHARS);
+		name.setX(leftPos + 62);
+		name.setY(topPos + 24);
+		name.setWidth(103);
+		itemLore$lastObservedName = itemLore$limitRawInput(name.getValue());
+		itemLore$lastSentName = itemLore$lastObservedName;
+	}
+
+	@Unique
+	private void itemLore$tickNameSender() {
+		if (name == null || itemLore$suppressNameSync) {
+			return;
+		}
+
+		String current = itemLore$limitRawInput(name.getValue());
+		if (!current.equals(name.getValue())) {
+			itemLore$suppressNameSync = true;
+			name.setValue(current);
+			itemLore$suppressNameSync = false;
+		}
+
+		if (itemLore$nameStateGraceTicks > 0) {
+			itemLore$lastObservedName = current;
+			itemLore$nameStateGraceTicks--;
+			return;
+		}
+
+		if (!current.equals(itemLore$lastObservedName)) {
+			itemLore$lastObservedName = current;
+			itemLore$nameDirty = true;
+			itemLore$nameSendDelay = itemLore$SEND_DELAY_TICKS;
+		}
+
+		if (itemLore$nameSendDelay > 0) {
+			itemLore$nameSendDelay--;
+		}
+
+		if (itemLore$nameDirty && itemLore$nameSendDelay <= 0 && ClientPlayNetworking.canSend(ServerboundAnvilNameUpdatePayload.TYPE)) {
+			if (!current.equals(itemLore$lastSentName)) {
+				ClientPlayNetworking.send(new ServerboundAnvilNameUpdatePayload(menu.containerId, itemLore$sessionId, current));
+				itemLore$lastSentName = current;
+			}
+			itemLore$nameDirty = false;
+		}
+	}
+
+	@Unique
+	private void itemLore$acceptServerNameState(String rawNameMarkup) {
+		if (name == null) {
+			return;
+		}
+
+		String safeRawName = itemLore$limitRawInput(rawNameMarkup == null ? "" : rawNameMarkup);
+		boolean forceCustomNameSync = false;
+		itemLore$suppressNameSync = true;
+		if (!safeRawName.isEmpty()) {
+			name.setValue(safeRawName);
+			itemLore$lastObservedName = safeRawName;
+			// Force one custom name sync so the server can correct vanilla's raw-tag rename preview.
+			itemLore$lastSentName = "";
+			forceCustomNameSync = true;
+		} else {
+			itemLore$lastObservedName = itemLore$limitRawInput(name.getValue());
+			itemLore$lastSentName = "";
+		}
+		itemLore$nameDirty = forceCustomNameSync;
+		itemLore$nameSendDelay = 0;
+		itemLore$nameStateGraceTicks = forceCustomNameSync ? 0 : 2;
+		itemLore$suppressNameSync = false;
 	}
 
 	@Unique
@@ -452,15 +546,13 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 	@Unique
 	private void itemLore$drawVanillaPanel(GuiGraphicsExtractor graphics, int x, int y, int panelWidth, int panelHeight) {
-		graphics.fill(x, y, x + panelWidth, y + panelHeight, itemLore$VANILLA_PANEL);
+		graphics.fill(x, y, x + panelWidth, y + panelHeight, itemLore$VANILLA_PANEL_SHADOW);
+		graphics.fill(x + 1, y + 1, x + panelWidth - 1, y + panelHeight - 1, itemLore$VANILLA_PANEL);
 
-		graphics.fill(x, y, x + panelWidth, y + 1, itemLore$VANILLA_PANEL_LIGHT);
-		graphics.fill(x, y, x + 1, y + panelHeight, itemLore$VANILLA_PANEL_LIGHT);
-		graphics.fill(x + panelWidth - 1, y, x + panelWidth, y + panelHeight, itemLore$VANILLA_PANEL_SHADOW);
-		graphics.fill(x, y + panelHeight - 1, x + panelWidth, y + panelHeight, itemLore$VANILLA_PANEL_SHADOW);
-
-		graphics.fill(x + 1, y + 1, x + panelWidth - 1, y + 2, itemLore$VANILLA_PANEL_DARK);
-		graphics.fill(x + 1, y + 1, x + 2, y + panelHeight - 1, itemLore$VANILLA_PANEL_DARK);
+		graphics.fill(x + 1, y + 1, x + panelWidth - 1, y + 2, itemLore$VANILLA_PANEL_LIGHT);
+		graphics.fill(x + 1, y + 1, x + 2, y + panelHeight - 1, itemLore$VANILLA_PANEL_LIGHT);
+		graphics.fill(x + panelWidth - 2, y + 1, x + panelWidth - 1, y + panelHeight - 1, itemLore$VANILLA_PANEL_DARK);
+		graphics.fill(x + 1, y + panelHeight - 2, x + panelWidth - 1, y + panelHeight - 1, itemLore$VANILLA_PANEL_DARK);
 	}
 
 	@Unique
