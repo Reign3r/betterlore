@@ -7,6 +7,7 @@
   "gui.item_lore.color_helper": "Color Picker",
   "gui.item_lore.color_preview": "Minecraft",
   "gui.item_lore.hex_input": "Hex color",
+  "gui.item_lore.color_wheel": "Color wheel",
   "gui.item_lore.copy_hex": "Copy %s",
   "gui.item_lore.insert_color": "Insert color",
   "gui.item_lore.insert_gradient": "Insert gradient",
@@ -32,7 +33,7 @@
   "gui.item_lore.help.nesting_right_gradient": "Keep gradient tags inside formatting tags when combining them.",
   "gui.item_lore.help.colors": "Insert color uses the selected color, gradient uses Color 1 then Color 2.",
   "gui.item_lore.help.sliders": "Drag RGB sliders, use < and >, or paste/type 0-255 while a slider is focused.",
-  "gui.item_lore.help.slider_keys": "Type or paste #rrggbb in the hex box to set the selected color.",
+  "gui.item_lore.help.slider_keys": "Click the color square for a wheel, or type/paste #rrggbb in the hex box.",
   "gui.item_lore.help.format_a": "Formatting: <b> bold, <i> italic, <underlined> underline.",
   "gui.item_lore.help.format_b": "Also: <st> strikethrough and <obf> obfuscated."
 }
