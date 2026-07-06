@@ -20,9 +20,16 @@ repositories {
 		name = "Shedaniel"
 		url = "https://maven.shedaniel.me/"
 	}
-	maven {
-		name = "Modrinth"
-		url = "https://api.modrinth.com/maven"
+	exclusiveContent {
+		forRepository {
+			maven {
+				name = "Modrinth"
+				url = "https://api.modrinth.com/maven"
+			}
+		}
+		filter {
+			includeGroup "maven.modrinth"
+		}
 	}
 }
 
@@ -30,7 +37,7 @@ dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	implementation include("maven.modrinth:placeholder-api:${project.placeholder_api_version}")
+	implementation "maven.modrinth:eXts2L7r:${project.placeholder_api_version_id}"
 
 	compileOnly "mezz.jei:jei-${project.minecraft_version}-fabric-api:${project.jei_version}"
 	compileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"
@@ -40,11 +47,14 @@ dependencies {
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher:6.0.1"
 }
 
+def expandedModVersion = project.version.toString()
+def expandedArchivesName = project.archives_base_name.toString()
+
 processResources {
-	inputs.property "version", project.version
+	inputs.property "version", expandedModVersion
 
 	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
+		expand "version": expandedModVersion
 	}
 }
 
@@ -73,10 +83,10 @@ java {
 }
 
 jar {
-	inputs.property "archivesName", project.base.archivesName
+	inputs.property "archivesName", expandedArchivesName
 
 	from("LICENSE") {
-		rename { "${it}_${inputs.properties.archivesName}" }
+		rename { "${it}_${expandedArchivesName}" }
 	}
 }
 
