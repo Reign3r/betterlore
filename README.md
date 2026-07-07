@@ -9,10 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://modrinth.com/mod/YOUR_MODRINTH_SLUG" target="_blank">
+  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank">
     <img src="docs\images\modrinth.png" align="absmiddle" alt="Modrinth" width="18" height="18" />
   </a>
-  <a href="https://modrinth.com/mod/YOUR_MODRINTH_SLUG" target="_blank"><b>Modrinth</b></a> | 
+  <a href="https://modrinth.com/mod/better-lore" target="_blank"><b>Modrinth</b></a> | 
   <a href="https://www.curseforge.com/minecraft/mc-mods/YOUR_CURSEFORGE_SLUG" target="_blank"> 
     <img src="https://cdn.simpleicons.org/curseforge/F16436" alt="CurseForge" width="18" height="18" align="absmiddle" />
   </a> 
@@ -28,10 +28,10 @@
   </a> 
   <a href="https://github.com/Reign3r/betterlore/issues" target="_blank"><b>Issues</b>
   </a> | 
-  <a href="https://ko-fi.com/YOUR_KOFI_NAME" target="_blank">
+  <a href="https://ko-fi.com/reign3r" target="_blank">
     <img src="https://cdn.simpleicons.org/kofi/FF5E5B" alt="Ko-fi" width="18" height="18" align="absmiddle" />
   </a>
-  <a href="https://ko-fi.com/YOUR_KOFI_NAME" target="_blank"><b>Support on Ko-fi</b></a>
+  <a href="https://ko-fi.com/reign3r" target="_blank"><b>Support on Ko-fi</b></a>
 </p>
 
 ## What is Better Lore?
