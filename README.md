@@ -9,14 +9,14 @@
 </p>
 
 <p align="center">
-  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank">
-    <img src="docs\images\modrinth.png" align="absmiddle" alt="Modrinth" width="18" height="18" />
+  <a href="https://modrinth.com/mod/better-lore" target="_blank">
+    <img src="docs/images/modrinth.png" align="absmiddle" alt="Modrinth" width="18" height="18" />
   </a>
   <a href="https://modrinth.com/mod/better-lore" target="_blank"><b>Modrinth</b></a> | 
-  <a href="https://www.curseforge.com/minecraft/mc-mods/YOUR_CURSEFORGE_SLUG" target="_blank"> 
+  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank"> 
     <img src="https://cdn.simpleicons.org/curseforge/F16436" alt="CurseForge" width="18" height="18" align="absmiddle" />
   </a> 
-  <a href="https://www.curseforge.com/minecraft/mc-mods/YOUR_CURSEFORGE_SLUG" target="_blank"><b>CurseForge</b>
+  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank"><b>CurseForge</b>
   </a> | 
   <a href="https://github.com/Reign3r/betterlore" target="_blank"> 
     <img src="https://cdn.simpleicons.org/github/ffffff" alt="GitHub" width="18" height="18" align="absmiddle" />
