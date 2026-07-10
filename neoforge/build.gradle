@@ -1,0 +1,84 @@
+plugins {
+	id 'java-library'
+	id 'net.neoforged.moddev'
+	id 'idea'
+}
+
+base {
+	archivesName = "${rootProject.archives_base_name}-neoforge"
+}
+
+sourceSets {
+	main {
+		java.srcDirs = ['../src/common/java', '../src/neoforge/java']
+		resources.srcDirs = ['../src/common/resources', '../src/neoforge/resources']
+	}
+	test {
+		java.srcDirs = ['../src/test/java']
+	}
+}
+
+neoForge {
+	version = rootProject.neoforge_version
+
+	runs {
+		client {
+			client()
+			systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+		}
+		server {
+			server()
+			programArgument '--nogui'
+			systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+		}
+		gameTestServer {
+			type = "gameTestServer"
+			systemProperty 'neoforge.enabledGameTestNamespaces', rootProject.mod_id
+		}
+		configureEach {
+			systemProperty 'forge.logging.markers', 'REGISTRIES'
+			logLevel = org.slf4j.event.Level.DEBUG
+		}
+	}
+
+	mods {
+		"${rootProject.mod_id}" {
+			sourceSet(sourceSets.main)
+		}
+	}
+}
+
+configurations {
+	runtimeClasspath.extendsFrom localRuntime
+}
+
+dependencies {
+	compileOnly "mezz.jei:jei-${rootProject.minecraft_version}-common-api:${rootProject.jei_version}"
+}
+
+def expandedModVersion = project.version.toString()
+def expandedNeoForgeVersion = rootProject.neoforge_version.toString()
+def expandedNeoForgeLoaderVersion = rootProject.neoforge_loader_version.toString()
+def expandedMinecraftVersion = rootProject.minecraft_version.toString()
+
+processResources {
+	inputs.property "version", expandedModVersion
+	inputs.property "neoforge_version", expandedNeoForgeVersion
+	inputs.property "neoforge_loader_version", expandedNeoForgeLoaderVersion
+	inputs.property "minecraft_version", expandedMinecraftVersion
+
+	filesMatching("META-INF/neoforge.mods.toml") {
+		expand(
+				version: expandedModVersion,
+				neoforge_version: expandedNeoForgeVersion,
+				neoforge_loader_version: expandedNeoForgeLoaderVersion,
+				minecraft_version: expandedMinecraftVersion
+		)
+	}
+}
+
+jar {
+	from("../LICENSE") {
+		rename { "${it}_${base.archivesName.get()}" }
+	}
+}

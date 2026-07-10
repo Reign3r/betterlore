@@ -1,0 +1,44 @@
+plugins {
+	id 'net.fabricmc.fabric-loom'
+}
+
+base {
+	archivesName = "${rootProject.archives_base_name}-fabric"
+}
+
+sourceSets {
+	main {
+		java.srcDirs = ['../src/common/java', '../src/fabric/java']
+		resources.srcDirs = ['../src/common/resources', '../src/fabric/resources']
+	}
+	test {
+		java.srcDirs = ['../src/test/java']
+	}
+}
+
+dependencies {
+	minecraft "com.mojang:minecraft:${rootProject.minecraft_version}"
+	implementation "net.fabricmc:fabric-loader:${rootProject.loader_version}"
+	implementation "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
+	implementation "maven.modrinth:eXts2L7r:${rootProject.placeholder_api_version_id}"
+
+	compileOnly "mezz.jei:jei-${rootProject.minecraft_version}-fabric-api:${rootProject.jei_version}"
+	compileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${rootProject.rei_version}"
+	compileOnly "me.shedaniel.cloth:basic-math:0.6.1"
+}
+
+def expandedModVersion = project.version.toString()
+
+processResources {
+	inputs.property "version", expandedModVersion
+
+	filesMatching("fabric.mod.json") {
+		expand "version": expandedModVersion
+	}
+}
+
+jar {
+	from("../LICENSE") {
+		rename { "${it}_${base.archivesName.get()}" }
+	}
+}

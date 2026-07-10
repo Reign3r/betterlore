@@ -1,103 +1,102 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
-	id 'maven-publish'
+	id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+	id 'net.neoforged.moddev' version "${moddevgradle_version}" apply false
+	id 'net.minecraftforge.gradle' version "${forgegradle_version}" apply false
 }
 
-version = project.mod_version + '+mc' + project.target_version
-group = project.maven_group
+allprojects {
+	group = rootProject.maven_group
+	version = rootProject.mod_version + '+mc' + rootProject.target_version
 
-base {
-	archivesName = project.archives_base_name
-}
-
-repositories {
-	mavenCentral()
-	maven {
-		name = "Jared"
-		url = "https://maven.blamejared.com/"
-	}
-	maven {
-		name = "Shedaniel"
-		url = "https://maven.shedaniel.me/"
-	}
-	exclusiveContent {
-		forRepository {
-			maven {
-				name = "Modrinth"
-				url = "https://api.modrinth.com/maven"
+	repositories {
+		mavenCentral()
+		maven {
+			name = "Fabric"
+			url = "https://maven.fabricmc.net/"
+		}
+		maven {
+			name = "Forge"
+			url = "https://maven.minecraftforge.net/"
+		}
+		maven {
+			name = "NeoForge"
+			url = "https://maven.neoforged.net/releases"
+		}
+		maven {
+			name = "Jared"
+			url = "https://maven.blamejared.com/"
+		}
+		maven {
+			name = "Shedaniel"
+			url = "https://maven.shedaniel.me/"
+		}
+		exclusiveContent {
+			forRepository {
+				maven {
+					name = "Modrinth"
+					url = "https://api.modrinth.com/maven"
+				}
+			}
+			filter {
+				includeGroup "maven.modrinth"
 			}
 		}
-		filter {
-			includeGroup "maven.modrinth"
-		}
 	}
 }
 
-dependencies {
-	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
-	implementation "maven.modrinth:eXts2L7r:${project.placeholder_api_version_id}"
+subprojects {
+	apply plugin: 'java'
+	apply plugin: 'maven-publish'
 
-	compileOnly "mezz.jei:jei-${project.minecraft_version}-fabric-api:${project.jei_version}"
-	compileOnly "me.shedaniel:RoughlyEnoughItems-api-fabric:${project.rei_version}"
-	compileOnly "me.shedaniel.cloth:basic-math:0.6.1"
-
-	testImplementation "org.junit.jupiter:junit-jupiter:6.0.1"
-	testRuntimeOnly "org.junit.platform:junit-platform-launcher:6.0.1"
-}
-
-def expandedModVersion = project.version.toString()
-def expandedArchivesName = project.archives_base_name.toString()
-
-processResources {
-	inputs.property "version", expandedModVersion
-
-	filesMatching("fabric.mod.json") {
-		expand "version": expandedModVersion
-	}
-}
-
-def java25Launcher = javaToolchains.launcherFor {
-	languageVersion = JavaLanguageVersion.of(25)
-}
-
-tasks.withType(JavaCompile).configureEach {
-	options.release = 25
-}
-
-tasks.withType(Test).configureEach {
-	useJUnitPlatform()
-	javaLauncher = java25Launcher
-}
-
-java {
-	toolchain {
+	def java25Launcher = javaToolchains.launcherFor {
 		languageVersion = JavaLanguageVersion.of(25)
 	}
 
-	withSourcesJar()
-
-	sourceCompatibility = JavaVersion.VERSION_25
-	targetCompatibility = JavaVersion.VERSION_25
-}
-
-jar {
-	inputs.property "archivesName", expandedArchivesName
-
-	from("LICENSE") {
-		rename { "${it}_${expandedArchivesName}" }
+	java {
+		toolchain {
+			languageVersion = JavaLanguageVersion.of(25)
+		}
+		withSourcesJar()
+		sourceCompatibility = JavaVersion.VERSION_25
+		targetCompatibility = JavaVersion.VERSION_25
 	}
-}
 
-publishing {
-	publications {
-		create("mavenJava", MavenPublication) {
-			artifactId = project.archives_base_name
-			from components.java
+	tasks.withType(JavaCompile).configureEach {
+		options.encoding = 'UTF-8'
+		options.release = 25
+	}
+
+	tasks.withType(Test).configureEach {
+		useJUnitPlatform()
+		javaLauncher = java25Launcher
+	}
+
+	tasks.withType(ProcessResources).configureEach {
+		duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+	}
+
+	dependencies {
+		testImplementation "org.junit.jupiter:junit-jupiter:${rootProject.junit_version}"
+		testRuntimeOnly "org.junit.platform:junit-platform-launcher:${rootProject.junit_version}"
+	}
+
+	publishing {
+		publications {
+			create("mavenJava", MavenPublication) {
+				from components.java
+			}
 		}
 	}
+}
 
-	repositories {
-	}
+tasks.register('buildAll26_1_2') {
+	group = 'build'
+	description = 'Builds every 26.1.2 loader artifact once the platform modules compile.'
+	dependsOn ':fabric:build', ':neoforge:build', ':forge:build'
+}
+
+tasks.register('testAll26_1_2') {
+	group = 'verification'
+	description = 'Runs the shared regression tests on every loader module that has tests enabled.'
+	dependsOn ':fabric:test', ':neoforge:test', ':forge:test'
 }
