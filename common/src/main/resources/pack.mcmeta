@@ -1,0 +1,8 @@
+{
+  "pack": {
+    "description": "Better Lore resources",
+    "pack_format": ${resource_pack_format},
+    "min_format": [${resource_pack_format}, ${resource_pack_minor}],
+    "max_format": [${resource_pack_format}, ${resource_pack_minor}]
+  }
+}

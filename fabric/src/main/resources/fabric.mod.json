@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "id": "better_lore",
+  "version": "0.0.0",
+  "name": "Better Lore",
+  "description": "Adds survival-friendly anvil lore/name editing powered by QuickText formatting.",
+  "authors": [
+    "Reign3r"
+  ],
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.reign.betterlore.fabric.BetterLoreFabricMod"
+    ],
+    "client": [
+      "com.reign.betterlore.fabric.BetterLoreFabricClientMod"
+    ],
+    "rei_client": [
+      "com.reign.betterlore.compat.rei.BetterLoreReiPlugin"
+    ]
+  },
+  "mixins": [
+    "better_lore.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": "*",
+    "java": ">=17",
+    "fabric-api": "*",
+    "placeholder-api": "*"
+  },
+  "suggests": {
+    "jei": "*",
+    "roughlyenoughitems": "*"
+  },
+  "icon": "assets/better_lore/icon.jpg",
+  "contact": {
+    "homepage": "https://github.com/Reign3r/betterlore",
+    "sources": "https://github.com/Reign3r/betterlore",
+    "issues": "https://github.com/Reign3r/betterlore/issues"
+  }
+}

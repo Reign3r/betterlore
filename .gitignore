@@ -1,13 +1,43 @@
+# Gradle caches and generated outputs. Keep only the curated release bundle
+# visible to Git; all per-loader/intermediate build trees remain ignored.
 .gradle/
-build/
+**/build/*
+!/build/release/
+/build/release/*
+!/build/release/*.jar
+!/build/release/manifest.json
+!/build/release/SUMMARY.txt
+
 out/
 run/
+logs/
+crash-reports/
+saves/
+screenshots/
 
 *.class
 *.log
+*.pyc
+*.hprof
+hs_err_pid*
+replay_pid*
+*.tmp
+*.bak
+*.swp
 
+**/__pycache__/
+legacy/neoforge-1.20.5/gradle/wrapper/gradle-wrapper.jar
 
 .agents/
+.codex/
 .idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
 .env
+.env.*
+!.env.example
 proposals/
+build/release/

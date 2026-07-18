@@ -1,0 +1,33 @@
+modLoader = "javafml"
+loaderVersion = "[${forge_loader_version},)"
+license = "MIT"
+issueTrackerURL = "https://github.com/Reign3r/betterlore/issues"
+
+[[mods]]
+modId = "better_lore"
+version = "${version}"
+displayName = "Better Lore"
+displayURL = "https://github.com/Reign3r/betterlore"
+authors = "Reign3r"
+description = '''
+Adds survival-friendly anvil lore/name editing powered by QuickText-compatible formatting.
+'''
+
+[[mixins]]
+config = "better_lore.mixins.json"
+
+[[dependencies.better_lore]]
+modId = "forge"
+mandatory = true
+versionRange = "[${forge_loader_version},)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.better_lore]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraft_version}]"
+ordering = "NONE"
+side = "BOTH"
+
+${jei_dependency}
