@@ -41,6 +41,14 @@ public final class ClientAnvilLoreNetworking {
 		return platform.canSendNameUpdate();
 	}
 
+	//? if >=1.20.6 {
+	//? if <1.21 {
+	public static boolean requiresStaticRecipeViewerPanelReservation() {
+		return platform.requiresStaticRecipeViewerPanelReservation();
+	}
+	//? }
+	//? }
+
 	public static void sendLoreUpdate(ServerboundAnvilLoreUpdatePayload payload) {
 		platform.sendLoreUpdate(payload);
 	}

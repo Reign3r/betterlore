@@ -78,7 +78,27 @@ public class ColorWheelWidget extends AbstractWidget {
 			return;
 		}
 
+		//? if >=1.21.6 {
 		drawContents(graphics::fill);
+		//? }
+	}
+	//? }
+
+	//? if <1.21.6 {
+	/**
+	 * Older GUI renderers keep button text at a higher depth than a widget
+	 * added later to the renderable list. Draw the popup in the screen's final
+	 * overlay pass so it cannot appear underneath the RGB controls.
+	 */
+	public void renderLateOverlay(GuiGraphics graphics) {
+		if (!visible) {
+			return;
+		}
+
+		graphics.pose().pushPose();
+		graphics.pose().translate(0.0F, 0.0F, 400.0F);
+		drawContents(graphics::fill);
+		graphics.pose().popPose();
 	}
 	//? }
 

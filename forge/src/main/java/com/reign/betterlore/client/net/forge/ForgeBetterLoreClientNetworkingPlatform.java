@@ -6,6 +6,7 @@ import com.reign.betterlore.net.ServerboundAnvilNameUpdatePayload;
 import com.reign.betterlore.net.forge.ForgeBetterLoreNetworkingPlatform;
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.network.PacketDistributor;
+import net.minecraftforge.versions.forge.ForgeVersion;
 
 /** Client-side Forge send bridge. */
 public final class ForgeBetterLoreClientNetworkingPlatform implements BetterLoreClientNetworkingPlatform {
@@ -13,6 +14,15 @@ public final class ForgeBetterLoreClientNetworkingPlatform implements BetterLore
 	public void registerClientReceiver() {
 		// Forge SimpleChannel registers the clientbound handler with the message type.
 	}
+
+	//? if >=1.20.6 {
+	//? if <1.21 {
+	@Override
+	public boolean requiresStaticRecipeViewerPanelReservation() {
+		return ForgeVersion.getVersion().startsWith("50.");
+	}
+	//? }
+	//? }
 
 	@Override
 	public boolean canSendLoreUpdate() {

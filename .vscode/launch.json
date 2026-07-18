@@ -4,182 +4,6 @@
     {
       "type": "java",
       "request": "launch",
-      "name": "1.20.6 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.20.6",
-        "order": 0
-      },
-      "projectName": "neoforge-1.20.6",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.20.6\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.1 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.1",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.1",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.1\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.2 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.2",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.2",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.2\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.3 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.3",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.3",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.3\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.4 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.4",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.4",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.4\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.5 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.5",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.5",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.5\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
-      "name": "1.21.6 - Client",
-      "presentation": {
-        "group": "Mod Development - 1.21.6",
-        "order": 0
-      },
-      "projectName": "neoforge-1.21.6",
-      "mainClass": "net.neoforged.devlaunch.Main",
-      "args": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\build\\moddev\\clientRunProgramArgs.txt"
-      ],
-      "vmArgs": [
-        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\build\\moddev\\clientRunVmArgs.txt",
-        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\bin\\main"
-      ],
-      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.6\\run",
-      "env": {},
-      "console": "internalConsole",
-      "shortenCommandLine": "none"
-    },
-    {
-      "type": "java",
-      "request": "launch",
       "name": "1.21.7 - Client",
       "presentation": {
         "group": "Mod Development - 1.21.7",
@@ -371,6 +195,182 @@
         "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\26.2\\bin\\main"
       ],
       "cwd": "${workspaceFolder}\\neoforge\\versions\\26.2\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.20.6 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.20.6",
+        "order": 0
+      },
+      "projectName": "neoforge-1.20.6",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.20.6\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.20.6\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.1 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.1",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.1",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.1\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.1\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.2 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.2",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.2",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.2\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.2\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.3 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.3",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.3",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.3\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.3\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.4 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.4",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.4",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.4\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.4\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.5 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.5",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.5",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.5\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.5\\run",
+      "env": {},
+      "console": "internalConsole",
+      "shortenCommandLine": "none"
+    },
+    {
+      "type": "java",
+      "request": "launch",
+      "name": "1.21.6 - Client",
+      "presentation": {
+        "group": "Mod Development - 1.21.6",
+        "order": 0
+      },
+      "projectName": "neoforge-1.21.6",
+      "mainClass": "net.neoforged.devlaunch.Main",
+      "args": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\build\\moddev\\clientRunProgramArgs.txt"
+      ],
+      "vmArgs": [
+        "@C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\build\\moddev\\clientRunVmArgs.txt",
+        "-Dfml.modFolders\u003dbetter_lore%%C:\\Users\\maksy\\Main_Storage\\MyProjects\\Item_Lore\\neoforge\\versions\\1.21.6\\bin\\main"
+      ],
+      "cwd": "${workspaceFolder}\\neoforge\\versions\\1.21.6\\run",
       "env": {},
       "console": "internalConsole",
       "shortenCommandLine": "none"

@@ -413,10 +413,15 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		int tooltipX = Math.min(mouseX, Math.max(0, width - 340));
 		graphics.setComponentTooltipForNextFrame(font, betterLore$helpTooltipLines(), tooltipX, mouseY);
 		//? } else {
+		GuiGraphics graphics = (GuiGraphics) graphicsObject;
+		//? if <1.21.6 {
+		if (betterLore$colorWheelWidget != null && betterLore$colorWheelWidget.visible) {
+			betterLore$colorWheelWidget.renderLateOverlay(graphics);
+		}
+		//? }
 		if (!betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
 			return;
 		}
-		GuiGraphics graphics = (GuiGraphics) graphicsObject;
 		int tooltipX = Math.min(mouseX, Math.max(0, width - 340));
 		graphics.renderComponentTooltip(font, betterLore$helpTooltipLines(), tooltipX, mouseY);
 		//? }
@@ -725,6 +730,17 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		if (button == 0 && !betterLore$isInColorSliderBounds(mouseX, mouseY)) {
 			betterLore$unfocusColorSliders();
 		}
+		//? if <1.21.4 {
+		// On older screens the restored Lore button can overlap the name field at
+		// narrow widths. Give the visible button first refusal so the name-field
+		// routing below cannot consume the click after the panel is closed.
+		if (betterLore$toggleButton != null
+				&& betterLore$toggleButton.visible
+				&& betterLore$toggleButton.active
+				&& betterLore$toggleButton.mouseClicked(mouseX, mouseY, button)) {
+			return true;
+		}
+		//? }
 		if (name != null && button == 0 && !betterLore$isInWidgetBounds(mouseX, mouseY, name)) {
 			name.setFocused(false);
 			betterLore$syncTextPreviewVisibility();
@@ -861,12 +877,63 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			return List.of(panel);
 		}
 
+		//? if >=1.20.6 {
+		//? if <1.21 {
+		// JEI 18 (the Forge 50 / Minecraft 1.20.6 line) caches extra GUI
+		// areas before the Lore panel is opened. Reserve the panel's eventual
+		// side-panel rectangle up front on that runtime only. Modern JEI releases
+		// continue to use the dynamic path above unchanged.
+		if (ClientAnvilLoreNetworking.requiresStaticRecipeViewerPanelReservation() && betterLore$canOpenPanel()) {
+			RecipeViewerArea reservedPanel = betterLore$prospectivePanelArea();
+			if (betterLore$toggleButton != null && betterLore$toggleButton.visible) {
+				RecipeViewerArea toggle = new RecipeViewerArea(
+						betterLore$toggleButton.getX(),
+						betterLore$toggleButton.getY(),
+						betterLore$toggleButton.getWidth(),
+						betterLore$toggleButton.getHeight()
+				);
+				return List.of(reservedPanel, toggle);
+			}
+			return List.of(reservedPanel);
+		}
+		//? }
+		//? }
+
 		if (betterLore$toggleButton != null && betterLore$toggleButton.visible) {
 			return List.of(new RecipeViewerArea(betterLore$toggleButton.getX(), betterLore$toggleButton.getY(), betterLore$toggleButton.getWidth(), betterLore$toggleButton.getHeight()));
 		}
 
 		return List.of();
 	}
+
+	//? if >=1.20.6 {
+	//? if <1.21 {
+	@Unique
+	private RecipeViewerArea betterLore$prospectivePanelArea() {
+		boolean sidePanel = betterLore$canUseSidePanel();
+		int panelWidth = sidePanel
+				? betterLore$sidePanelWidthForScreen()
+				: betterLore$overlayPanelWidthForScreen();
+		int prospectiveLeft = leftPos;
+		if (sidePanel) {
+			int combinedWidth = imageWidth + betterLore$PANEL_GAP + panelWidth;
+			prospectiveLeft = Math.max(betterLore$SCREEN_MARGIN, (width - combinedWidth) / 2);
+		}
+		int panelX = sidePanel
+				? prospectiveLeft + imageWidth + betterLore$PANEL_GAP
+				: Math.max(betterLore$SCREEN_MARGIN, (width - panelWidth) / 2);
+		int panelHeight = Math.min(betterLore$PANEL_HEIGHT, height - 2 * betterLore$SCREEN_MARGIN);
+		int panelY = Math.max(
+				betterLore$SCREEN_MARGIN,
+				Math.min(
+						topPos - Math.max(0, (panelHeight - imageHeight) / 2),
+						height - panelHeight - betterLore$SCREEN_MARGIN
+				)
+		);
+		return new RecipeViewerArea(panelX, panelY, panelWidth, panelHeight);
+	}
+	//? }
+	//? }
 
 	@Unique
 	private void betterLore$configureNameField() {
