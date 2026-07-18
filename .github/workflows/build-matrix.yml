@@ -4,11 +4,18 @@ on:
   push:
   pull_request:
 
+concurrency:
+  group: build-matrix-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Avoid sending dozens of cold Gradle dependency graphs to the same
+      # Minecraft mod repositories at once.
+      max-parallel: 6
       matrix:
         minecraft: [26.2, 26.1.2, 26.1.1, 26.1, 1.21.11, 1.21.10, 1.21.9, 1.21.8, 1.21.7, 1.21.6, 1.21.5, 1.21.4, 1.21.3, 1.21.2, 1.21.1, 1.21, 1.20.6, 1.20.5]
         loader: [fabric, neoforge, forge]
@@ -33,17 +40,24 @@ jobs:
           base='26.1.2'
           common="$base"
           if [ "$target" != "$base" ]; then common="$base,$target"; fi
-          fabric="$base"
-          neoforge="$base"
-          forge="$base"
+          # Register the active Stonecutter version through the dependency-free
+          # common branch only. Enabling every loader's base project made each
+          # matrix cell resolve unrelated dependencies before its own build.
+          fabric=''
+          neoforge=''
+          forge=''
           case '${{ matrix.loader }}' in
-            fabric) fabric="$common" ;;
-            neoforge) neoforge="$common" ;;
-            forge) forge="$common" ;;
+            fabric) fabric="$target" ;;
+            neoforge) neoforge="$target" ;;
+            forge) forge="$target" ;;
           esac
+          build_task=':${{ matrix.loader }}:${{ matrix.minecraft }}:build'
+          if [ '${{ matrix.loader }}' = 'neoforge' ] && [ "$target" = '1.20.5' ]; then
+            build_task=':neoforge:1.20.5:legacyUserdevReleaseJar'
+          fi
           ./gradlew \
             "-Pstonecutter_enabled_common_versions=$common" \
             "-Pstonecutter_enabled_fabric_versions=$fabric" \
             "-Pstonecutter_enabled_neoforge_versions=$neoforge" \
             "-Pstonecutter_enabled_forge_versions=$forge" \
-            ':${{ matrix.loader }}:${{ matrix.minecraft }}:build'
+            "$build_task"
