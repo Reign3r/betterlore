@@ -5,6 +5,8 @@ import com.reign.betterlore.lore.LoreMarkupDecompiler;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
 import com.reign.betterlore.net.AnvilLoreNetworking;
+import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 //? if >=1.21.5 {
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
@@ -26,9 +28,7 @@ import net.minecraft.world.level.saveddata.SavedDataType;
 //? }
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Persists the editable name/lore source for blocks placed from decorated items.
@@ -41,10 +41,10 @@ import java.util.Map;
 public final class PlacedItemTextStorage extends SavedData {
 	private static final String DATA_NAME = "better_lore_placed_item_text";
 	private static final String ENTRIES_KEY = "entries";
-	private final Map<Long, Entry> entries = new HashMap<>();
+	private final Long2ObjectOpenHashMap<ItemText> entries;
 
 	//? if >=1.21.5 {
-	private static final Codec<PlacedItemTextStorage> CODEC = Entry.CODEC.listOf().xmap(
+	private static final Codec<PlacedItemTextStorage> CODEC = SerializedEntry.CODEC.listOf().xmap(
 			PlacedItemTextStorage::new,
 			PlacedItemTextStorage::serializedEntries
 	);
@@ -73,17 +73,27 @@ public final class PlacedItemTextStorage extends SavedData {
 	//? }
 
 	public PlacedItemTextStorage() {
+		this(2);
+	}
+
+	private PlacedItemTextStorage(int expectedEntries) {
+		entries = new Long2ObjectOpenHashMap<>(Math.max(2, expectedEntries));
 	}
 
 	//? if >=1.21.5 {
-	private PlacedItemTextStorage(List<Entry> serializedEntries) {
-		for (Entry entry : serializedEntries) {
-			entries.put(entry.packedPos(), entry);
+	private PlacedItemTextStorage(List<SerializedEntry> serializedEntries) {
+		this(serializedEntries.size());
+		for (SerializedEntry entry : serializedEntries) {
+			entries.put(entry.packedPos(), entry.itemText());
 		}
 	}
 
-	private List<Entry> serializedEntries() {
-		return List.copyOf(entries.values());
+	private List<SerializedEntry> serializedEntries() {
+		List<SerializedEntry> serializedEntries = new ArrayList<>(entries.size());
+		for (Long2ObjectMap.Entry<ItemText> entry : entries.long2ObjectEntrySet()) {
+			serializedEntries.add(new SerializedEntry(entry.getLongKey(), entry.getValue()));
+		}
+		return serializedEntries;
 	}
 	//? }
 
@@ -92,22 +102,51 @@ public final class PlacedItemTextStorage extends SavedData {
 			return;
 		}
 
-		PlacedItemTextStorage storage = get(serverLevel);
 		long packedPos = pos.asLong();
 		String rawLore = LoreMarkupDecompiler.toSafeLoreMarkup(placedStack);
 		String rawName = LoreMarkupDecompiler.toSafeNameMarkup(placedStack);
 		if (rawLore.isEmpty() && rawName.isEmpty()) {
-			if (storage.entries.remove(packedPos) != null) {
+			PlacedItemTextStorage storage = getIfPresent(serverLevel);
+			if (storage != null && storage.entries.remove(packedPos) != null) {
 				storage.setDirty();
 			}
 			return;
 		}
 
+		PlacedItemTextStorage storage = get(serverLevel);
 		String itemId = BuiltInRegistries.ITEM.getKey(placedStack.getItem()).toString();
-		Entry replacement = new Entry(packedPos, itemId, rawLore, rawName);
+		ItemText replacement = new ItemText(itemId, rawLore, rawName);
 		if (!replacement.equals(storage.entries.put(packedPos, replacement))) {
 			storage.setDirty();
 		}
+	}
+
+	/** Moves any saved text with a block and clears text displaced at its destination. */
+	public static void move(ServerLevel level, long sourcePos, long destinationPos) {
+		PlacedItemTextStorage storage = getIfPresent(level);
+		if (storage != null && moveEntry(storage.entries, sourcePos, destinationPos)) {
+			storage.setDirty();
+		}
+	}
+
+	/**
+	 * Rekeys one sparse entry without allocating or copying its value.
+	 *
+	 * <p>Vanilla installs moving piston blocks from farthest to nearest, so this
+	 * also handles adjacent moved blocks without a temporary collection.</p>
+	 */
+	static <T> boolean moveEntry(Long2ObjectMap<T> entries, long sourcePos, long destinationPos) {
+		if (sourcePos == destinationPos) {
+			return false;
+		}
+
+		T moved = entries.remove(sourcePos);
+		if (moved == null) {
+			return entries.remove(destinationPos) != null;
+		}
+
+		entries.put(destinationPos, moved);
+		return true;
 	}
 
 	/** Applies and consumes saved text when the matching placed block item drops. */
@@ -116,9 +155,13 @@ public final class PlacedItemTextStorage extends SavedData {
 			return;
 		}
 
-		PlacedItemTextStorage storage = get(serverLevel);
+		PlacedItemTextStorage storage = getIfPresent(serverLevel);
+		if (storage == null) {
+			return;
+		}
+
 		long packedPos = pos.asLong();
-		Entry entry = storage.entries.get(packedPos);
+		ItemText entry = storage.entries.get(packedPos);
 		if (entry == null) {
 			return;
 		}
@@ -156,20 +199,28 @@ public final class PlacedItemTextStorage extends SavedData {
 		//? }
 	}
 
+	private static PlacedItemTextStorage getIfPresent(ServerLevel level) {
+		//? if >=1.21.5 {
+		return level.getDataStorage().get(TYPE);
+		//? } else {
+		return level.getDataStorage().get(FACTORY, DATA_NAME);
+		//? }
+	}
+
 	//? if <1.21.5 {
 	private static PlacedItemTextStorage load(CompoundTag tag, HolderLookup.Provider registries) {
-		PlacedItemTextStorage storage = new PlacedItemTextStorage();
 		ListTag serializedEntries = tag.getList(ENTRIES_KEY, Tag.TAG_COMPOUND);
+		PlacedItemTextStorage storage = new PlacedItemTextStorage(serializedEntries.size());
 		for (int index = 0; index < serializedEntries.size(); index++) {
 			CompoundTag serialized = serializedEntries.getCompound(index);
-			Entry entry = new Entry(
-					serialized.getLong("pos"),
+			long packedPos = serialized.getLong("pos");
+			ItemText itemText = new ItemText(
 					serialized.getString("item"),
 					serialized.getString("lore"),
 					serialized.getString("name")
 			);
-			if (!entry.itemId().isEmpty()) {
-				storage.entries.put(entry.packedPos(), entry);
+			if (!itemText.itemId().isEmpty()) {
+				storage.entries.put(packedPos, itemText);
 			}
 		}
 		return storage;
@@ -178,12 +229,17 @@ public final class PlacedItemTextStorage extends SavedData {
 	@Override
 	public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
 		ListTag serializedEntries = new ListTag();
-		for (Entry entry : entries.values()) {
+		for (Long2ObjectMap.Entry<ItemText> entry : entries.long2ObjectEntrySet()) {
+			ItemText itemText = entry.getValue();
 			CompoundTag serialized = new CompoundTag();
-			serialized.putLong("pos", entry.packedPos());
-			serialized.putString("item", entry.itemId());
-			serialized.putString("lore", entry.rawLore());
-			serialized.putString("name", entry.rawName());
+			serialized.putLong("pos", entry.getLongKey());
+			serialized.putString("item", itemText.itemId());
+			if (!itemText.rawLore().isEmpty()) {
+				serialized.putString("lore", itemText.rawLore());
+			}
+			if (!itemText.rawName().isEmpty()) {
+				serialized.putString("name", itemText.rawName());
+			}
 			serializedEntries.add(serialized);
 		}
 		tag.put(ENTRIES_KEY, serializedEntries);
@@ -191,14 +247,18 @@ public final class PlacedItemTextStorage extends SavedData {
 	}
 	//? }
 
-	private record Entry(long packedPos, String itemId, String rawLore, String rawName) {
+	private record ItemText(String itemId, String rawLore, String rawName) {
+	}
+
+	private record SerializedEntry(long packedPos, ItemText itemText) {
 		//? if >=1.21.5 {
-		private static final Codec<Entry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-				Codec.LONG.fieldOf("pos").forGetter(Entry::packedPos),
-				Codec.STRING.fieldOf("item").forGetter(Entry::itemId),
-				Codec.STRING.optionalFieldOf("lore", "").forGetter(Entry::rawLore),
-				Codec.STRING.optionalFieldOf("name", "").forGetter(Entry::rawName)
-		).apply(instance, Entry::new));
+		private static final Codec<SerializedEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+				Codec.LONG.fieldOf("pos").forGetter(SerializedEntry::packedPos),
+				Codec.STRING.fieldOf("item").forGetter(entry -> entry.itemText().itemId()),
+				Codec.STRING.optionalFieldOf("lore", "").forGetter(entry -> entry.itemText().rawLore()),
+				Codec.STRING.optionalFieldOf("name", "").forGetter(entry -> entry.itemText().rawName())
+		).apply(instance, (packedPos, itemId, rawLore, rawName) ->
+				new SerializedEntry(packedPos, new ItemText(itemId, rawLore, rawName))));
 		//? }
 	}
 }

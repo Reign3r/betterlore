@@ -620,10 +620,12 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 		if (betterLore$isPanelInteractive() && event.button() == 0) {
 			if (betterLore$colorWheelOpen && betterLore$colorWheelWidget != null && betterLore$colorWheelWidget.visible && betterLore$colorWheelWidget.mouseClicked(event, doubleClick)) {
+				betterLore$unfocusLoreEditor();
 				return true;
 			}
 
 			if (betterLore$isInColorSwatchBounds(event.x(), event.y())) {
+				betterLore$unfocusLoreEditor();
 				betterLore$colorWheelOpen = !betterLore$colorWheelOpen;
 				betterLore$layoutLoreWidgets();
 				return true;
@@ -644,15 +646,20 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 				return true;
 			}
 
+			Button insertionButton = betterLore$insertionButtonAt(event.x(), event.y());
+			if (insertionButton != null && insertionButton.mouseClicked(event, doubleClick)) {
+				return true;
+			}
+
 			if (betterLore$isInPanelBounds(event.x(), event.y())) {
+				betterLore$unfocusLoreEditor();
 				if (super.mouseClicked(event, doubleClick)) {
 					return true;
 				}
 				return true;
 			}
 
-			betterLore$editor.setFocused(false);
-			betterLore$draggingLoreSelection = false;
+			betterLore$unfocusLoreEditor();
 		}
 
 		return super.mouseClicked(event, doubleClick);
@@ -759,10 +766,12 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			if (betterLore$colorWheelOpen && betterLore$colorWheelWidget != null
 					&& betterLore$colorWheelWidget.visible
 					&& betterLore$colorWheelWidget.mouseClicked(mouseX, mouseY, button)) {
+				betterLore$unfocusLoreEditor();
 				return true;
 			}
 
 			if (betterLore$isInColorSwatchBounds(mouseX, mouseY)) {
+				betterLore$unfocusLoreEditor();
 				betterLore$colorWheelOpen = !betterLore$colorWheelOpen;
 				betterLore$layoutLoreWidgets();
 				return true;
@@ -784,13 +793,18 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 				return true;
 			}
 
+			Button insertionButton = betterLore$insertionButtonAt(mouseX, mouseY);
+			if (insertionButton != null && insertionButton.mouseClicked(mouseX, mouseY, button)) {
+				return true;
+			}
+
 			if (betterLore$isInPanelBounds(mouseX, mouseY)) {
+				betterLore$unfocusLoreEditor();
 				super.mouseClicked(mouseX, mouseY, button);
 				return true;
 			}
 
-			betterLore$editor.setFocused(false);
-			betterLore$draggingLoreSelection = false;
+			betterLore$unfocusLoreEditor();
 		}
 
 		return super.mouseClicked(mouseX, mouseY, button);
@@ -1405,6 +1419,19 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	}
 
 	@Unique
+	private void betterLore$unfocusLoreEditor() {
+		if (betterLore$editor == null) {
+			return;
+		}
+		betterLore$editor.setFocused(false);
+		if (getFocused() == betterLore$editor) {
+			setFocused(null);
+		}
+		betterLore$draggingLoreSelection = false;
+		betterLore$syncTextPreviewVisibility();
+	}
+
+	@Unique
 	private void betterLore$unfocusTextFields() {
 		if (betterLore$editor != null) {
 			betterLore$editor.setFocused(false);
@@ -1853,6 +1880,40 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	@Unique
 	private boolean betterLore$isInPanelBounds(double mouseX, double mouseY) {
 		return betterLore$isInBounds(mouseX, mouseY, betterLore$panelX, betterLore$panelY, betterLore$panelWidth, betterLore$panelHeight);
+	}
+
+	@Unique
+	private Button betterLore$insertionButtonAt(double mouseX, double mouseY) {
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$insertColorButton)) {
+			return betterLore$insertColorButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$insertGradientButton)) {
+			return betterLore$insertGradientButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$formatBoldButton)) {
+			return betterLore$formatBoldButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$formatItalicButton)) {
+			return betterLore$formatItalicButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$formatUnderlineButton)) {
+			return betterLore$formatUnderlineButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$formatStrikeButton)) {
+			return betterLore$formatStrikeButton;
+		}
+		if (betterLore$isActiveWidgetAt(mouseX, mouseY, betterLore$formatObfuscatedButton)) {
+			return betterLore$formatObfuscatedButton;
+		}
+		return null;
+	}
+
+	@Unique
+	private boolean betterLore$isActiveWidgetAt(double mouseX, double mouseY, Button widget) {
+		return widget != null
+				&& widget.visible
+				&& widget.active
+				&& betterLore$isInWidgetBounds(mouseX, mouseY, widget);
 	}
 
 	@Unique

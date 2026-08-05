@@ -6,7 +6,8 @@
   "mixins": [
     "AnvilMenuMixin",
     "BlockItemMixin",
-    "BlockDropMixin"
+    "BlockDropMixin",
+    "PistonMovingBlockEntityMixin"
   ],
   "client": [
     "client.AnvilScreenMixin",
