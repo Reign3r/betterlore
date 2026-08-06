@@ -89,6 +89,10 @@ Tags used:
 
 Fabric API and Text Placeholder API are required dependencies. Install them alongside Better Lore.
 
+### Development releases
+
+The project compiles all 52 supported loader/version targets, then publishes 24 compatibility artifacts instead of one jar per target. See [release compatibility](docs/release-compatibility.md) for the range layout, verification guarantees, and Prism smoke-test workflow.
+
 ### Client and server behavior
 
 Install Better Lore on the **server** to enable anvil-based lore and name editing.

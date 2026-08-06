@@ -8,6 +8,7 @@ modId = "better_lore"
 version = "${version}"
 displayName = "Better Lore"
 displayURL = "https://github.com/Reign3r/betterlore"
+logoFile = "assets/better_lore/icon.jpg"
 authors = "Reign3r"
 description = '''
 Adds survival-friendly anvil lore/name editing powered by QuickText-compatible formatting.

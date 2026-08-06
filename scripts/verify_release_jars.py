@@ -13,6 +13,7 @@ import argparse
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import re
@@ -31,6 +32,14 @@ SCRIPT_DIRECTORY = Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
+from release_matrix import (
+    FABRIC_FAMILIES,
+    PublishedArtifact,
+    fabric_inner_path,
+    published_artifacts,
+    validate_release_matrix,
+    version_label,
+)
 from verify_matrix import Artifact, ROOT, UNSUPPORTED, declared_artifacts, validate_matrix
 
 
@@ -85,6 +94,16 @@ _QUALIFIED_CLASS = re.compile(
     r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)+$"
 )
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_FORBIDDEN_RUNTIME_ASSETS = frozenset(
+    {
+        "assets/better_lore/Banner.jpg",
+        "assets/better_lore/Banner.png",
+        "assets/better_lore/Banner_concept.png",
+        "assets/better_lore/Banner_concept_result.jpg",
+        "assets/better_lore/icon.png",
+        "assets/better_lore/icon_2.png",
+    }
+)
 
 
 class ReleaseJarVerificationError(RuntimeError):
@@ -94,7 +113,8 @@ class ReleaseJarVerificationError(RuntimeError):
 @dataclass(frozen=True)
 class VerifiedArtifact:
     loader: str
-    minecraft: str
+    minecraft_versions: tuple[str, ...]
+    strategy: str
     file: str
     bytes: int
     sha256: str
@@ -180,6 +200,7 @@ def _validate_fabric_descriptor(
     jei_available: bool,
     errors: list[str],
     archive_label: str,
+    minecraft_dependency: object | None = None,
 ) -> None:
     resource = "fabric.mod.json"
     try:
@@ -203,7 +224,7 @@ def _validate_fabric_descriptor(
     else:
         _require_equal(
             dependencies.get("minecraft"),
-            artifact.minecraft,
+            artifact.minecraft if minecraft_dependency is None else minecraft_dependency,
             "depends.minecraft",
             resource,
             errors,
@@ -260,6 +281,7 @@ def _validate_toml_descriptor(
     jei_available: bool,
     errors: list[str],
     archive_label: str,
+    minecraft_range: str | None = None,
 ) -> None:
     resource = "META-INF/mods.toml" if artifact.loader == "forge" else "META-INF/neoforge.mods.toml"
     if tomllib is None:
@@ -293,6 +315,14 @@ def _validate_toml_descriptor(
         else:
             mod = matching[0]
             _require_equal(mod.get("version"), mod_version, "[[mods]].version", resource, errors, archive_label)
+            _require_equal(
+                mod.get("logoFile"),
+                "assets/better_lore/icon.jpg",
+                "[[mods]].logoFile",
+                resource,
+                errors,
+                archive_label,
+            )
             if not isinstance(mod.get("displayName"), str) or not mod["displayName"].strip():
                 errors.append(f"{archive_label}: {resource} [[mods]].displayName must be a non-empty string")
 
@@ -315,7 +345,7 @@ def _validate_toml_descriptor(
         for entry in dependency_entries
         if _is_mapping(entry) and entry.get("modId") == "minecraft"
     ]
-    expected_range = f"[{artifact.minecraft}]"
+    expected_range = minecraft_range or f"[{artifact.minecraft}]"
     if not minecraft_dependencies:
         errors.append(f"{archive_label}: {resource} is missing its required minecraft dependency")
     elif not any(entry.get("versionRange") == expected_range for entry in minecraft_dependencies):
@@ -460,6 +490,10 @@ def _validate_archive(
     jei_available: bool = True,
     resource_pack_format: int | None = None,
     resource_pack_minor: int = 0,
+    resource_pack_max_format: int | None = None,
+    resource_pack_max_minor: int = 0,
+    minecraft_dependency: object | None = None,
+    minecraft_range: str | None = None,
 ) -> list[str]:
     """Return every structural problem in one release archive."""
 
@@ -475,6 +509,11 @@ def _validate_archive(
                 if len(duplicates) > 5:
                     rendered += ", ..."
                 errors.append(f"{archive_label}: archive contains duplicate path(s): {rendered}")
+            forbidden = sorted(names & _FORBIDDEN_RUNTIME_ASSETS)
+            if forbidden:
+                errors.append(
+                    f"{archive_label}: archive contains non-runtime artwork: {', '.join(forbidden)}"
+                )
 
             descriptor_name = (
                 "fabric.mod.json"
@@ -488,11 +527,25 @@ def _validate_archive(
                 _unresolved_token_errors(descriptor, descriptor_name, errors, archive_label)
                 if artifact.loader == "fabric":
                     _validate_fabric_descriptor(
-                        descriptor, artifact, mod_id, mod_version, jei_available, errors, archive_label
+                        descriptor,
+                        artifact,
+                        mod_id,
+                        mod_version,
+                        jei_available,
+                        errors,
+                        archive_label,
+                        minecraft_dependency,
                     )
                 else:
                     _validate_toml_descriptor(
-                        descriptor, artifact, mod_id, mod_version, jei_available, errors, archive_label
+                        descriptor,
+                        artifact,
+                        mod_id,
+                        mod_version,
+                        jei_available,
+                        errors,
+                        archive_label,
+                        minecraft_range,
                     )
 
             if jei_available and JEI_PLUGIN_CLASS_PATH not in names:
@@ -524,6 +577,7 @@ def _validate_archive(
                             errors,
                             archive_label,
                         )
+                        maximum_format = resource_pack_max_format or resource_pack_format
                         expected_range = [resource_pack_format, resource_pack_minor]
                         _require_equal(
                             pack.get("min_format"),
@@ -535,12 +589,31 @@ def _validate_archive(
                         )
                         _require_equal(
                             pack.get("max_format"),
-                            expected_range,
+                            [maximum_format, resource_pack_max_minor],
                             "pack.max_format",
                             "pack.mcmeta",
                             errors,
                             archive_label,
                         )
+                        if resource_pack_format < 65 <= maximum_format:
+                            errors.append(
+                                f"{archive_label}: pack.mcmeta crosses the format-65 "
+                                "supported_formats compatibility boundary"
+                            )
+                        elif maximum_format < 65:
+                            _require_equal(
+                                pack.get("supported_formats"),
+                                [resource_pack_format, maximum_format],
+                                "pack.supported_formats",
+                                "pack.mcmeta",
+                                errors,
+                                archive_label,
+                            )
+                        elif "supported_formats" in pack:
+                            errors.append(
+                                f"{archive_label}: pack.mcmeta pack.supported_formats "
+                                "is forbidden starting with pack format 65"
+                            )
 
             _validate_mixin_configuration(archive, names, errors, archive_label)
             _validate_service_providers(archive, names, artifact, errors, archive_label)
@@ -642,19 +715,356 @@ def _validate_summary(path: Path, artifact_count: int) -> list[str]:
     return []
 
 
+def _jei_available(state, loader: str, minecraft: str) -> bool:
+    profile = state.profiles[minecraft]
+    version = profile.get(f"deps.jei_{loader}", profile.get("deps.jei"))
+    return version != UNSUPPORTED
+
+
+def _pack_bounds(state, versions: tuple[str, ...]) -> tuple[int, int, int, int]:
+    first = state.profiles[versions[0]]
+    last = state.profiles[versions[-1]]
+    return (
+        int(first["minecraft.resource_pack_format"]),
+        int(first["minecraft.resource_pack_minor"]),
+        int(last["minecraft.resource_pack_format"]),
+        int(last["minecraft.resource_pack_minor"]),
+    )
+
+
+def _fabric_dependency_versions(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, list) and all(isinstance(entry, str) for entry in value):
+        return tuple(value)
+    return ()
+
+
+def _validate_fabric_bundle(
+    path: Path,
+    artifact: PublishedArtifact,
+    state,
+    mod_id: str,
+    mod_version: str,
+    temporary: Path,
+) -> list[str]:
+    errors: list[str] = []
+    label = f"fabric bundle ({path.name})"
+    try:
+        with zipfile.ZipFile(path) as archive:
+            infos = archive.infolist()
+            names = {info.filename for info in infos}
+            duplicates = sorted(
+                name for name, count in Counter(info.filename for info in infos).items() if count > 1
+            )
+            if duplicates:
+                errors.append(f"{label}: duplicate archive paths: {', '.join(duplicates)}")
+            forbidden = sorted(names & _FORBIDDEN_RUNTIME_ASSETS)
+            if forbidden:
+                errors.append(f"{label}: contains non-runtime artwork: {', '.join(forbidden)}")
+            descriptor_text = _read_archive_text(archive, "fabric.mod.json", errors, label)
+            if descriptor_text is None:
+                return errors
+            try:
+                descriptor = json.loads(descriptor_text)
+            except json.JSONDecodeError as error:
+                return errors + [f"{label}: fabric.mod.json is invalid JSON ({error})"]
+            if not _is_mapping(descriptor):
+                return errors + [f"{label}: fabric.mod.json must be an object"]
+            _require_equal(descriptor.get("schemaVersion"), 1, "schemaVersion", "fabric.mod.json", errors, label)
+            _require_equal(descriptor.get("id"), mod_id, "id", "fabric.mod.json", errors, label)
+            _require_equal(str(descriptor.get("version")), mod_version, "version", "fabric.mod.json", errors, label)
+            if "entrypoints" in descriptor or "mixins" in descriptor:
+                errors.append(f"{label}: public carrier must not load Minecraft-linked code")
+            dependencies = descriptor.get("depends")
+            if not _is_mapping(dependencies):
+                errors.append(f"{label}: depends must be an object")
+            else:
+                _require_equal(
+                    dependencies.get("minecraft"),
+                    list(artifact.versions),
+                    "depends.minecraft",
+                    "fabric.mod.json",
+                    errors,
+                    label,
+                )
+                if "better_lore_impl" not in dependencies:
+                    errors.append(f"{label}: carrier does not require better_lore_impl")
+
+            expected_paths = [fabric_inner_path(family) for family in FABRIC_FAMILIES]
+            jars = descriptor.get("jars")
+            actual_paths = []
+            if isinstance(jars, list):
+                actual_paths = [
+                    entry.get("file")
+                    for entry in jars
+                    if _is_mapping(entry) and isinstance(entry.get("file"), str)
+                ]
+            _require_equal(actual_paths, expected_paths, "jars", "fabric.mod.json", errors, label)
+            nested_names = sorted(
+                name
+                for name in names
+                if name.startswith("META-INF/jars/") and name.endswith(".jar")
+            )
+            _require_equal(nested_names, sorted(expected_paths), "nested jars", "archive", errors, label)
+
+            claimed_by_path: dict[str, tuple[str, ...]] = {}
+            for family, nested_path in zip(FABRIC_FAMILIES, expected_paths):
+                if nested_path not in names:
+                    continue
+                data = archive.read(nested_path)
+                if len(data) > 1024 * 1024:
+                    errors.append(f"{label}: {nested_path} exceeds the 1 MiB implementation budget")
+                try:
+                    with zipfile.ZipFile(BytesIO(data)) as nested:
+                        inner_descriptor = json.loads(nested.read("fabric.mod.json").decode("utf-8"))
+                        manifest = nested.read("META-INF/MANIFEST.MF").decode("utf-8")
+                except (KeyError, UnicodeDecodeError, json.JSONDecodeError, zipfile.BadZipFile) as error:
+                    errors.append(f"{label}: invalid {nested_path} ({error})")
+                    continue
+                claimed = _fabric_dependency_versions(
+                    inner_descriptor.get("depends", {}).get("minecraft")
+                    if _is_mapping(inner_descriptor.get("depends"))
+                    else None
+                )
+                claimed_by_path[nested_path] = claimed
+                _require_equal(
+                    claimed,
+                    family,
+                    "depends.minecraft",
+                    f"{nested_path}!/fabric.mod.json",
+                    errors,
+                    label,
+                )
+                expected_namespace = "official" if family[0].startswith("26.") else "intermediary"
+                namespace_match = re.search(
+                    r"^Fabric-Mapping-Namespace:\s*(\S+)\s*$", manifest, re.MULTILINE
+                )
+                actual_namespace = namespace_match.group(1) if namespace_match else None
+                _require_equal(
+                    actual_namespace,
+                    expected_namespace,
+                    "Fabric-Mapping-Namespace",
+                    f"{nested_path}!/META-INF/MANIFEST.MF",
+                    errors,
+                    label,
+                )
+                nested_file = temporary / f"fabric-{version_label(family)}.jar"
+                nested_file.write_bytes(data)
+                min_format, min_minor, max_format, max_minor = _pack_bounds(state, family)
+                jei_values = {_jei_available(state, "fabric", version) for version in family}
+                if len(jei_values) != 1:
+                    errors.append(f"{label}: {nested_path} crosses a JEI availability boundary")
+                    jei = True
+                else:
+                    jei = next(iter(jei_values))
+                errors.extend(
+                    _validate_archive(
+                        nested_file,
+                        Artifact("fabric", family[0]),
+                        "better_lore_impl",
+                        f"{mod_version}+mc.{version_label(family)}",
+                        jei,
+                        min_format,
+                        min_minor,
+                        max_format,
+                        max_minor,
+                        family[0] if len(family) == 1 else list(family),
+                    )
+                )
+
+            for minecraft in artifact.versions:
+                compatible = [
+                    nested_path
+                    for nested_path, claimed in claimed_by_path.items()
+                    if minecraft in claimed
+                ]
+                if len(compatible) != 1:
+                    errors.append(
+                        f"{label}: {minecraft} matches {len(compatible)} nested candidates: {compatible}"
+                    )
+            unexpected_claims = sorted(
+                {
+                    version
+                    for claimed in claimed_by_path.values()
+                    for version in claimed
+                    if version not in artifact.versions
+                }
+            )
+            if unexpected_claims:
+                errors.append(f"{label}: nested candidates claim unsupported versions {unexpected_claims}")
+    except (OSError, zipfile.BadZipFile) as error:
+        errors.append(f"{label}: invalid jar archive ({error})")
+    if path.stat().st_size > 8 * 1024 * 1024:
+        errors.append(f"{label}: bundle exceeds the 8 MiB storage budget")
+    return errors
+
+
+def _validate_compatibility_archive(
+    path: Path,
+    artifact: PublishedArtifact,
+    state,
+    mod_id: str,
+    mod_version: str,
+    temporary: Path,
+) -> list[str]:
+    if artifact.strategy == "fabric_bundle":
+        return _validate_fabric_bundle(path, artifact, state, mod_id, mod_version, temporary)
+    min_format, min_minor, max_format, max_minor = _pack_bounds(state, artifact.versions)
+    jei_values = {_jei_available(state, artifact.loader, version) for version in artifact.versions}
+    errors: list[str] = []
+    if len(jei_values) != 1:
+        errors.append(
+            f"{artifact.loader} {artifact.label}: compatibility range crosses a JEI availability boundary"
+        )
+        jei = True
+    else:
+        jei = next(iter(jei_values))
+    errors.extend(
+        _validate_archive(
+            path,
+            Artifact(artifact.loader, artifact.anchor),
+            mod_id,
+            mod_version,
+            jei,
+            min_format,
+            min_minor,
+            max_format,
+            max_minor,
+            minecraft_range=artifact.maven_range,
+        )
+    )
+    if path.stat().st_size > 2 * 1024 * 1024:
+        errors.append(
+            f"{artifact.loader} {artifact.label} ({path.name}): range jar exceeds the 2 MiB storage budget"
+        )
+    return errors
+
+
+def _validate_manifest_v2(
+    path: Path,
+    release: Path,
+    root: Path,
+    artifacts: tuple[PublishedArtifact, ...],
+    mod_version: str,
+) -> list[str]:
+    errors: list[str] = []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        return [f"{MANIFEST_NAME} is invalid ({error})"]
+    if not _is_mapping(payload):
+        return [f"{MANIFEST_NAME} must be an object"]
+    _require_equal(payload.get("schema_version"), 2, "schema_version", MANIFEST_NAME, errors, "release manifest")
+    _require_equal(payload.get("artifact_count"), len(artifacts), "artifact_count", MANIFEST_NAME, errors, "release manifest")
+    _require_equal(payload.get("target_count"), len(declared_artifacts()), "target_count", MANIFEST_NAME, errors, "release manifest")
+
+    records = payload.get("artifacts")
+    if not isinstance(records, list):
+        return errors + [f"{MANIFEST_NAME} artifacts must be an array"]
+    expected_by_file = {artifact.file_name(mod_version): artifact for artifact in artifacts}
+    seen_files: set[str] = set()
+    for index, record in enumerate(records):
+        label = f"{MANIFEST_NAME} artifacts[{index}]"
+        if not _is_mapping(record):
+            errors.append(f"{label} must be an object")
+            continue
+        file_name = record.get("file")
+        artifact = expected_by_file.get(file_name) if isinstance(file_name, str) else None
+        if artifact is None:
+            errors.append(f"{label} names unexpected file {file_name!r}")
+            continue
+        if file_name in seen_files:
+            errors.append(f"{label} duplicates {file_name}")
+            continue
+        seen_files.add(file_name)
+        _require_equal(record.get("loader"), artifact.loader, "loader", label, errors, "release manifest")
+        _require_equal(record.get("minecraft_versions"), list(artifact.versions), "minecraft_versions", label, errors, "release manifest")
+        _require_equal(record.get("strategy"), artifact.strategy, "strategy", label, errors, "release manifest")
+        jar = release / file_name
+        if jar.is_file():
+            _require_equal(record.get("bytes"), jar.stat().st_size, "bytes", label, errors, "release manifest")
+            _require_equal(record.get("sha256"), _sha256(jar), "sha256", label, errors, "release manifest")
+        proofs = record.get("verified_sources")
+        if not isinstance(proofs, list) or len(proofs) != len(artifact.versions):
+            errors.append(f"{label} verified_sources must contain one proof per supported version")
+            continue
+        for version, proof in zip(artifact.versions, proofs):
+            if not _is_mapping(proof):
+                errors.append(f"{label} has an invalid source proof")
+                continue
+            source = root / artifact.loader / "versions" / version / "build" / "libs" / _archive_name(
+                Artifact(artifact.loader, version), mod_version
+            )
+            expected_path = source.relative_to(root).as_posix()
+            _require_equal(proof.get("path"), expected_path, "path", label, errors, "source proof")
+            if not source.is_file():
+                errors.append(f"{label}: source proof file is missing: {expected_path}")
+            elif source.is_symlink():
+                errors.append(f"{label}: source proof file must not be a symlink: {expected_path}")
+            else:
+                _require_equal(proof.get("sha256"), _sha256(source), "sha256", label, errors, "source proof")
+
+    missing_files = sorted(set(expected_by_file) - seen_files)
+    if missing_files:
+        errors.append("release manifest misses artifact(s): " + ", ".join(missing_files))
+
+    targets = payload.get("targets")
+    if not isinstance(targets, list):
+        return errors + [f"{MANIFEST_NAME} targets must be an array"]
+    actual_targets: dict[tuple[str, str], Mapping[str, Any]] = {}
+    for record in targets:
+        if not _is_mapping(record):
+            errors.append("release manifest has a non-object target")
+            continue
+        key = (record.get("loader"), record.get("minecraft"))
+        if not all(isinstance(value, str) for value in key):
+            errors.append(f"release manifest has an invalid target key {key!r}")
+            continue
+        if key in actual_targets:
+            errors.append(f"release manifest duplicates target {key[0]} {key[1]}")
+        actual_targets[key] = record
+    for compile_target in declared_artifacts():
+        key = (compile_target.loader, compile_target.minecraft)
+        record = actual_targets.get(key)
+        if record is None:
+            errors.append(f"release manifest misses target {key[0]} {key[1]}")
+            continue
+        artifact = next(
+            candidate
+            for candidate in artifacts
+            if candidate.loader == key[0] and key[1] in candidate.versions
+        )
+        _require_equal(record.get("file"), artifact.file_name(mod_version), "file", "target", errors, "release manifest")
+        expected_nested = None
+        if key[0] == "fabric":
+            family = next(family for family in FABRIC_FAMILIES if key[1] in family)
+            expected_nested = fabric_inner_path(family)
+        if expected_nested is None:
+            if "nested_candidate" in record:
+                errors.append(f"release manifest target {key[0]} {key[1]} unexpectedly names a nested candidate")
+        else:
+            _require_equal(record.get("nested_candidate"), expected_nested, "nested_candidate", "target", errors, "release manifest")
+    unexpected_targets = sorted(set(actual_targets) - {(a.loader, a.minecraft) for a in declared_artifacts()})
+    if unexpected_targets:
+        errors.append(f"release manifest contains unsupported targets: {unexpected_targets}")
+    return errors
+
+
 def verify_release_jars(
     root: Path = ROOT,
     release_directory: Path | None = None,
 ) -> tuple[VerifiedArtifact, ...]:
-    """Validate the exact collected release set and return verified records.
-
-    ``release_directory`` is optional for CI staging.  A normal invocation
-    always validates the collector's canonical ``build/release`` directory.
-    """
+    """Validate the 24-file compatibility release and all 52 target mappings."""
 
     state = validate_matrix(root)
     if state.errors:
         raise ReleaseJarVerificationError("matrix validation failed:\n" + "\n".join(state.errors))
+    release_matrix_errors = validate_release_matrix()
+    if release_matrix_errors:
+        raise ReleaseJarVerificationError(
+            "release matrix validation failed:\n" + "\n".join(release_matrix_errors)
+        )
 
     mod_id = state.root_properties.get("mod.id", "").strip()
     mod_version = state.root_properties.get("mod.version", "").strip()
@@ -663,7 +1073,7 @@ def verify_release_jars(
     if not mod_version or any(character in mod_version for character in "/\\"):
         raise ReleaseJarVerificationError("gradle.properties: mod.version is missing or unsafe for archive verification")
 
-    artifacts = declared_artifacts()
+    artifacts = published_artifacts()
     release = release_directory or root / "build" / RELEASE_DIRECTORY_NAME
     if not release.is_absolute():
         release = root / release
@@ -676,7 +1086,7 @@ def verify_release_jars(
             f"release directory is missing or not a real directory: {release} (run collectReleaseJars first)"
         )
 
-    expected_names = {_archive_name(artifact, mod_version) for artifact in artifacts}
+    expected_names = {artifact.file_name(mod_version) for artifact in artifacts}
     allowed_names = expected_names | {MANIFEST_NAME, SUMMARY_NAME}
     errors: list[str] = []
     try:
@@ -691,44 +1101,38 @@ def verify_release_jars(
         elif not child.is_file():
             errors.append(f"release directory entry must be a file: {child.name}")
 
-    errors.extend(_validate_manifest(release / MANIFEST_NAME, release, root, artifacts, mod_version))
+    errors.extend(
+        _validate_manifest_v2(release / MANIFEST_NAME, release, root, artifacts, mod_version)
+    )
     errors.extend(_validate_summary(release / SUMMARY_NAME, len(artifacts)))
 
     verified: list[VerifiedArtifact] = []
-    for artifact in artifacts:
-        file_name = _archive_name(artifact, mod_version)
-        path = release / file_name
-        if not path.is_file():
-            errors.append(f"missing release jar: {file_name}")
-            continue
-        if path.is_symlink():
-            errors.append(f"release jar must not be a symlink: {file_name}")
-            continue
-        profile = state.profiles.get(artifact.minecraft, {})
-        jei_version = profile.get(f"deps.jei_{artifact.loader}", profile.get("deps.jei"))
-        jei_available = jei_version != UNSUPPORTED
-        resource_pack_format = int(profile["minecraft.resource_pack_format"])
-        resource_pack_minor = int(profile["minecraft.resource_pack_minor"])
-        errors.extend(
-            _validate_archive(
-                path,
-                artifact,
-                mod_id,
-                mod_version,
-                jei_available,
-                resource_pack_format,
-                resource_pack_minor,
+    with tempfile.TemporaryDirectory(prefix="better-lore-compat-verifier-") as temporary_name:
+        temporary = Path(temporary_name)
+        for artifact in artifacts:
+            file_name = artifact.file_name(mod_version)
+            path = release / file_name
+            if not path.is_file():
+                errors.append(f"missing release jar: {file_name}")
+                continue
+            if path.is_symlink():
+                errors.append(f"release jar must not be a symlink: {file_name}")
+                continue
+            errors.extend(
+                _validate_compatibility_archive(
+                    path, artifact, state, mod_id, mod_version, temporary
+                )
             )
-        )
-        verified.append(
-            VerifiedArtifact(
-                loader=artifact.loader,
-                minecraft=artifact.minecraft,
-                file=file_name,
-                bytes=path.stat().st_size,
-                sha256=_sha256(path),
+            verified.append(
+                VerifiedArtifact(
+                    loader=artifact.loader,
+                    minecraft_versions=artifact.versions,
+                    strategy=artifact.strategy,
+                    file=file_name,
+                    bytes=path.stat().st_size,
+                    sha256=_sha256(path),
+                )
             )
-        )
 
     if errors:
         raise ReleaseJarVerificationError("release jar verification failed:\n" + "\n".join(errors))
@@ -767,6 +1171,10 @@ def _write_synthetic_fabric_jar(
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("fabric.mod.json", json.dumps(descriptor))
         archive.writestr(MIXIN_CONFIGURATION, json.dumps(mixin_config))
+        archive.writestr(
+            "pack.mcmeta",
+            json.dumps({"pack": {"description": "test", "pack_format": 1}}),
+        )
         if not omit_mixin:
             archive.writestr("example/mixin/ExampleMixin.class", b"not-a-real-class")
         if include_jei:

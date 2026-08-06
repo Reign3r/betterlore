@@ -51,3 +51,18 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:${providers.gradleProperty("deps.junit").get()}")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:${providers.gradleProperty("deps.junit").get()}")
 }
+
+// The repository keeps high-resolution artwork for documentation and release
+// pages, but loading it from every runtime jar only wastes disk, download, and
+// mod-scan resources. The descriptor uses the compact JPEG icon; language and
+// all other functional assets remain packaged normally.
+tasks.processResources {
+    exclude(
+        "assets/better_lore/Banner.jpg",
+        "assets/better_lore/Banner.png",
+        "assets/better_lore/Banner_concept.png",
+        "assets/better_lore/Banner_concept_result.jpg",
+        "assets/better_lore/icon.png",
+        "assets/better_lore/icon_2.png",
+    )
+}

@@ -461,7 +461,7 @@ def main() -> int:
         if profile.get(key) == UNSUPPORTED
     ]
 
-    print(f"Declared matrix is valid: {len(state.artifacts)} loader artifacts.")
+    print(f"Declared compile matrix is valid: {len(state.artifacts)} loader/version targets.")
     print(f"Currently enabled loader targets: {enabled_count}.")
     if disabled_integrations:
         print("Explicitly disabled optional integrations: " + ", ".join(disabled_integrations))

@@ -14,37 +14,53 @@ val pythonExecutable = if (System.getProperty("os.name").contains("Windows", ign
 } else {
     "python3"
 }
+val enabledMinecraftVersions = providers.gradleProperty("stonecutter_enabled_common_versions")
+    .get()
+    .split(',')
+    .map(String::trim)
+    .filter(String::isNotEmpty)
+val releaseCoordinator = enabledMinecraftVersions.first()
+val releaseCoordinatorPath = ":$releaseCoordinator"
 
-val verifyMatrix by tasks.registering(Exec::class) {
-    group = "verification"
-    description = "Validates the declared loader/version matrix and architecture invariants."
-    commandLine(pythonExecutable, rootProject.file("scripts/verify_matrix.py").absolutePath)
+if (project.name == releaseCoordinator) {
+    tasks.register<Exec>("verifyMatrix") {
+        group = "verification"
+        description = "Validates the 52-target compile matrix and architecture invariants."
+        commandLine(pythonExecutable, rootProject.file("scripts/verify_matrix.py").absolutePath)
+    }
+    tasks.register<Exec>("verifyReleaseMatrix") {
+        group = "verification"
+        description = "Validates the 24-artifact compatibility partition."
+        commandLine(pythonExecutable, rootProject.file("scripts/release_matrix.py").absolutePath)
+    }
 }
 
 val buildAll by tasks.registering {
     group = "build"
     description = "Builds every enabled Stonecutter common and loader target."
-    dependsOn(verifyMatrix)
+    dependsOn("$releaseCoordinatorPath:verifyMatrix", "$releaseCoordinatorPath:verifyReleaseMatrix")
 }
 
 val testAll by tasks.registering {
     group = "verification"
     description = "Runs the shared test suite for every enabled Minecraft version."
-    dependsOn(verifyMatrix)
+    dependsOn("$releaseCoordinatorPath:verifyMatrix", "$releaseCoordinatorPath:verifyReleaseMatrix")
 }
 
-val collectReleaseJars by tasks.registering(Exec::class) {
-    group = "distribution"
-    description = "Collects remapped/reobfuscated loader jars into build/release."
-    dependsOn(buildAll)
-    commandLine(pythonExecutable, rootProject.file("scripts/collect_release_jars.py").absolutePath)
-}
+if (project.name == releaseCoordinator) {
+    val collectReleaseJars by tasks.registering(Exec::class) {
+        group = "distribution"
+        description = "Packages verified compatibility-range jars into build/release."
+        dependsOn(enabledMinecraftVersions.map { ":$it:buildAll" })
+        commandLine(pythonExecutable, rootProject.file("scripts/collect_release_jars.py").absolutePath)
+    }
 
-val verifyReleaseJars by tasks.registering(Exec::class) {
-    group = "verification"
-    description = "Validates release jars, descriptors, mixins, and ServiceLoader wiring."
-    dependsOn(collectReleaseJars)
-    commandLine(pythonExecutable, rootProject.file("scripts/verify_release_jars.py").absolutePath)
+    tasks.register<Exec>("verifyReleaseJars") {
+        group = "verification"
+        description = "Validates release jars, descriptors, mixins, and ServiceLoader wiring."
+        dependsOn(collectReleaseJars)
+        commandLine(pythonExecutable, rootProject.file("scripts/verify_release_jars.py").absolutePath)
+    }
 }
 
 gradle.projectsEvaluated {
