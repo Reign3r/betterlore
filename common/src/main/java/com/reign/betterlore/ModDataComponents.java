@@ -1,14 +1,12 @@
 package com.reign.betterlore;
 
-import net.minecraft.core.component.DataComponents;
-import net.minecraft.nbt.CompoundTag;
-//? if <1.21.5 {
-import net.minecraft.nbt.Tag;
-//? }
+import com.reign.betterlore.compat.CompatibilityRuntime;
+import com.reign.betterlore.compat.data.ModDataComponentsBackend;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 
 public final class ModDataComponents {
+	private static final String BACKEND_CLASS_NAME =
+			"com.reign.betterlore.compat.data.ModDataComponentsBackendImpl";
 	private static final String ROOT_KEY = AnvilLoreMod.MOD_ID;
 	private static final String RAW_LORE_MARKUP_KEY = "raw_lore_markup";
 	private static final String RAW_NAME_MARKUP_KEY = "raw_name_markup";
@@ -49,15 +47,7 @@ public final class ModDataComponents {
 	}
 
 	private static String getString(ItemStack stack, String key) {
-		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-		if (customData == null || customData.isEmpty()) {
-			return null;
-		}
-
-		CompoundTag root = customData.copyTag();
-		CompoundTag betterLoreData = nestedBetterLoreData(root);
-		String value = nestedString(betterLoreData, key);
-		return value.isEmpty() ? null : value;
+		return backend().getString(stack, ROOT_KEY, key);
 	}
 
 	private static void setString(ItemStack stack, String key, String value) {
@@ -66,57 +56,21 @@ public final class ModDataComponents {
 			return;
 		}
 
-		CompoundTag root = rootTag(stack);
-		CompoundTag betterLoreData = nestedBetterLoreData(root).copy();
-		betterLoreData.putString(key, value);
-		root.put(ROOT_KEY, betterLoreData);
-		stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
+		backend().setString(stack, ROOT_KEY, key, value);
 	}
 
 	private static void removeString(ItemStack stack, String key) {
-		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-		if (customData == null || customData.isEmpty()) {
-			return;
-		}
-
-		CompoundTag root = customData.copyTag();
-		CompoundTag betterLoreData = nestedBetterLoreData(root).copy();
-		if (betterLoreData.isEmpty()) {
-			return;
-		}
-
-		betterLoreData.remove(key);
-		if (betterLoreData.isEmpty()) {
-			root.remove(ROOT_KEY);
-		} else {
-			root.put(ROOT_KEY, betterLoreData);
-		}
-
-		if (root.isEmpty()) {
-			stack.remove(DataComponents.CUSTOM_DATA);
-		} else {
-			stack.set(DataComponents.CUSTOM_DATA, CustomData.of(root));
-		}
+		backend().removeString(stack, ROOT_KEY, key);
 	}
 
-	private static CompoundTag rootTag(ItemStack stack) {
-		CustomData customData = stack.get(DataComponents.CUSTOM_DATA);
-		return customData == null || customData.isEmpty() ? new CompoundTag() : customData.copyTag();
+	private static ModDataComponentsBackend backend() {
+		return BackendHolder.INSTANCE;
 	}
 
-	private static CompoundTag nestedBetterLoreData(CompoundTag root) {
-		//? if >=1.21.5 {
-		return root.getCompoundOrEmpty(ROOT_KEY);
-		//? } else {
-		return root.contains(ROOT_KEY, Tag.TAG_COMPOUND) ? root.getCompound(ROOT_KEY) : new CompoundTag();
-		//? }
-	}
-
-	private static String nestedString(CompoundTag data, String key) {
-		//? if >=1.21.5 {
-		return data.getStringOr(key, "");
-		//? } else {
-		return data.contains(key, Tag.TAG_STRING) ? data.getString(key) : "";
-		//? }
+	private static final class BackendHolder {
+		private static final ModDataComponentsBackend INSTANCE = CompatibilityRuntime.instantiate(
+				BACKEND_CLASS_NAME,
+				ModDataComponentsBackend.class
+		);
 	}
 }

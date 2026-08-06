@@ -34,6 +34,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from release_matrix import (
     FABRIC_FAMILIES,
+    FAMILIES_BY_LOADER,
     PublishedArtifact,
     fabric_inner_path,
     published_artifacts,
@@ -53,6 +54,32 @@ CLIENT_NETWORKING_SERVICE = "com.reign.betterlore.client.net.BetterLoreClientNet
 QUICKTEXT_PARSER_SERVICE = "com.reign.betterlore.lore.quicktext.QuickTextParserAdapter"
 JEI_PLUGIN_CLASS = "com.reign.betterlore.compat.jei.BetterLoreJeiPlugin"
 JEI_PLUGIN_CLASS_PATH = JEI_PLUGIN_CLASS.replace(".", "/") + ".class"
+_JEI_COMPATIBILITY_MIXIN_CLASS = (
+    "com.reign.betterlore.mixin.compat.BetterLoreJeiPluginCompatibilityMixin"
+)
+_JEI_COMPATIBILITY_MIXIN_CLASS_PATH = (
+    _JEI_COMPATIBILITY_MIXIN_CLASS.replace(".", "/") + ".class"
+)
+_BETTER_LORE_INTERNAL_PREFIX = "com/reign/betterlore/"
+_JAVA_21_CLASSFILE_MAJOR = 65
+_MIXIN_PLUGIN_CLASS = "com.reign.betterlore.compat.BetterLoreMixinPlugin"
+_MIXIN_PLUGIN_CLASS_PATH = _MIXIN_PLUGIN_CLASS.replace(".", "/") + ".class"
+_COMPATIBILITY_RUNTIME_CLASSES = frozenset(
+    {
+        "com/reign/betterlore/compat/CompatibilityRuntime.class",
+        "com/reign/betterlore/compat/CompatibilityRuntime$Selection.class",
+    }
+)
+_FML_BOOTSTRAP_CLASS = {
+    "forge": "com/reign/betterlore/forge/BetterLoreForgeBootstrap.class",
+    "neoforge": "com/reign/betterlore/neoforge/BetterLoreNeoForgeBootstrap.class",
+}
+_FML_IMPLEMENTATION_CLASS = {
+    "forge": "forge/BetterLoreForgeMod.class",
+    "neoforge": "neoforge/BetterLoreNeoForgeMod.class",
+}
+_RESOURCE_LOCATION_RETURN = "()Lnet/minecraft/resources/ResourceLocation;"
+_IDENTIFIER_RETURN = "()Lnet/minecraft/resources/Identifier;"
 
 # These are an intentional part of the release contract.  Requiring exactly
 # one implementation avoids ServiceLoader's first-provider-wins behaviour from
@@ -88,6 +115,12 @@ EXPECTED_SERVICE_PROVIDERS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         ),
     },
 }
+_NETWORK_SERVICE_RESOURCES = frozenset(
+    {
+        f"META-INF/services/{SERVER_NETWORKING_SERVICE}",
+        f"META-INF/services/{CLIENT_NETWORKING_SERVICE}",
+    }
+)
 
 _UNRESOLVED_TOKEN = re.compile(r"\$\{[^}\r\n]+\}")
 _QUALIFIED_CLASS = re.compile(
@@ -282,6 +315,7 @@ def _validate_toml_descriptor(
     errors: list[str],
     archive_label: str,
     minecraft_range: str | None = None,
+    validate_jei_contract: bool = True,
 ) -> None:
     resource = "META-INF/mods.toml" if artifact.loader == "forge" else "META-INF/neoforge.mods.toml"
     if tomllib is None:
@@ -355,17 +389,18 @@ def _validate_toml_descriptor(
             f"expected {expected_range!r}"
         )
 
-    jei_dependencies = [
-        entry
-        for entry in dependency_entries
-        if _is_mapping(entry) and entry.get("modId") == "jei"
-    ]
-    if jei_available and not jei_dependencies:
-        errors.append(f"{archive_label}: {resource} is missing its optional JEI dependency declaration")
-    elif not jei_available and jei_dependencies:
-        errors.append(
-            f"{archive_label}: {resource} declares JEI although the profile disables JEI"
-        )
+    if validate_jei_contract:
+        jei_dependencies = [
+            entry
+            for entry in dependency_entries
+            if _is_mapping(entry) and entry.get("modId") == "jei"
+        ]
+        if jei_available and not jei_dependencies:
+            errors.append(f"{archive_label}: {resource} is missing its optional JEI dependency declaration")
+        elif not jei_available and jei_dependencies:
+            errors.append(
+                f"{archive_label}: {resource} declares JEI although the profile disables JEI"
+            )
 
 
 def _mixin_class_name(package: str, entry: str) -> str:
@@ -448,6 +483,7 @@ def _validate_service_providers(
     artifact: Artifact,
     errors: list[str],
     archive_label: str,
+    expected_providers: Mapping[str, tuple[str, ...]] | None = None,
 ) -> None:
     resources = sorted(name for name in names if name.startswith("META-INF/services/") and not name.endswith("/"))
     parsed: dict[str, tuple[str, ...]] = {}
@@ -468,7 +504,12 @@ def _validate_service_providers(
                     f"{archive_label}: {resource} declares {provider}, but {class_path} is absent from the jar"
                 )
 
-    for service, expected in EXPECTED_SERVICE_PROVIDERS[artifact.loader].items():
+    required = (
+        EXPECTED_SERVICE_PROVIDERS[artifact.loader]
+        if expected_providers is None
+        else expected_providers
+    )
+    for service, expected in required.items():
         actual = parsed.get(service)
         resource = f"META-INF/services/{service}"
         if actual is None:
@@ -494,6 +535,8 @@ def _validate_archive(
     resource_pack_max_minor: int = 0,
     minecraft_dependency: object | None = None,
     minecraft_range: str | None = None,
+    validate_jei_contract: bool = True,
+    expected_service_providers: Mapping[str, tuple[str, ...]] | None = None,
 ) -> list[str]:
     """Return every structural problem in one release archive."""
 
@@ -546,16 +589,18 @@ def _validate_archive(
                         errors,
                         archive_label,
                         minecraft_range,
+                        validate_jei_contract,
                     )
 
-            if jei_available and JEI_PLUGIN_CLASS_PATH not in names:
-                errors.append(
-                    f"{archive_label}: profile enables JEI but {JEI_PLUGIN_CLASS_PATH} is absent from the jar"
-                )
-            elif not jei_available and JEI_PLUGIN_CLASS_PATH in names:
-                errors.append(
-                    f"{archive_label}: profile disables JEI but {JEI_PLUGIN_CLASS_PATH} is present in the jar"
-                )
+            if validate_jei_contract:
+                if jei_available and JEI_PLUGIN_CLASS_PATH not in names:
+                    errors.append(
+                        f"{archive_label}: profile enables JEI but {JEI_PLUGIN_CLASS_PATH} is absent from the jar"
+                    )
+                elif not jei_available and JEI_PLUGIN_CLASS_PATH in names:
+                    errors.append(
+                        f"{archive_label}: profile disables JEI but {JEI_PLUGIN_CLASS_PATH} is present in the jar"
+                    )
 
             pack_metadata = _read_archive_text(archive, "pack.mcmeta", errors, archive_label)
             if pack_metadata is not None:
@@ -616,7 +661,14 @@ def _validate_archive(
                             )
 
             _validate_mixin_configuration(archive, names, errors, archive_label)
-            _validate_service_providers(archive, names, artifact, errors, archive_label)
+            _validate_service_providers(
+                archive,
+                names,
+                artifact,
+                errors,
+                archive_label,
+                expected_service_providers,
+            )
     except (OSError, zipfile.BadZipFile) as error:
         errors.append(f"{archive_label}: invalid jar archive ({error})")
     return errors
@@ -817,6 +869,13 @@ def _validate_fabric_bundle(
                     errors.append(f"{label}: {nested_path} exceeds the 1 MiB implementation budget")
                 try:
                     with zipfile.ZipFile(BytesIO(data)) as nested:
+                        nested_names = set(nested.namelist())
+                        _validate_adapter_classfiles(
+                            nested,
+                            nested_names,
+                            errors,
+                            f"{label}: {nested_path}",
+                        )
                         inner_descriptor = json.loads(nested.read("fabric.mod.json").decode("utf-8"))
                         manifest = nested.read("META-INF/MANIFEST.MF").decode("utf-8")
                 except (KeyError, UnicodeDecodeError, json.JSONDecodeError, zipfile.BadZipFile) as error:
@@ -900,6 +959,560 @@ def _validate_fabric_bundle(
     return errors
 
 
+def _adapter_family_id(family: tuple[str, ...]) -> str:
+    label = version_label(family).replace(".", "_").replace("-", "_")
+    return "mc" + label
+
+
+def _flat_adapter_families(
+    artifact: PublishedArtifact,
+    errors: list[str],
+    archive_label: str,
+) -> tuple[tuple[str, ...], ...]:
+    families: list[tuple[str, ...]] = []
+    for family in FAMILIES_BY_LOADER[artifact.loader]:
+        selected = [version for version in family if version in artifact.versions]
+        if not selected:
+            continue
+        if len(selected) != len(family):
+            errors.append(
+                f"{archive_label}: public adapter splits retained binary family {family!r}"
+            )
+            continue
+        families.append(family)
+    covered = tuple(version for family in families for version in family)
+    if covered != artifact.versions:
+        errors.append(
+            f"{archive_label}: retained binary families cover {covered!r}, "
+            f"expected {artifact.versions!r}"
+        )
+    return tuple(families)
+
+
+def _classfile_layout(
+    data: bytes,
+) -> tuple[int, list[str | None], list[int], int]:
+    """Return classfile major, UTF-8 constants, class-name indexes, and pool end."""
+
+    if len(data) < 10 or data[:4] != b"\xca\xfe\xba\xbe":
+        raise ValueError("invalid Java classfile header")
+    major = int.from_bytes(data[6:8], "big")
+    constant_count = int.from_bytes(data[8:10], "big")
+    utf8: list[str | None] = [None] * constant_count
+    class_name_indexes: list[int] = []
+    fixed_sizes = {
+        3: 4,
+        4: 4,
+        5: 8,
+        6: 8,
+        7: 2,
+        8: 2,
+        9: 4,
+        10: 4,
+        11: 4,
+        12: 4,
+        15: 3,
+        16: 2,
+        17: 4,
+        18: 4,
+        19: 2,
+        20: 2,
+    }
+    offset = 10
+    index = 1
+    while index < constant_count:
+        if offset >= len(data):
+            raise ValueError("truncated Java constant pool")
+        tag = data[offset]
+        offset += 1
+        if tag == 1:
+            if offset + 2 > len(data):
+                raise ValueError("truncated Java UTF-8 constant")
+            length = int.from_bytes(data[offset : offset + 2], "big")
+            offset += 2
+            if offset + length > len(data):
+                raise ValueError("truncated Java UTF-8 payload")
+            utf8[index] = data[offset : offset + length].decode("utf-8", errors="replace")
+            offset += length
+        else:
+            size = fixed_sizes.get(tag)
+            if size is None:
+                raise ValueError(f"unsupported Java constant-pool tag {tag}")
+            if offset + size > len(data):
+                raise ValueError("truncated Java constant-pool entry")
+            if tag == 7:
+                class_name_indexes.append(
+                    int.from_bytes(data[offset : offset + 2], "big")
+                )
+            offset += size
+            if tag in (5, 6):
+                index += 1
+        index += 1
+    return major, utf8, class_name_indexes, offset
+
+
+def _classfile_structural_references(data: bytes) -> set[str]:
+    """Return classes referenced by constants, descriptors, and signatures."""
+
+    _, utf8, class_name_indexes, _ = _classfile_layout(data)
+    references: set[str] = set()
+    for name_index in class_name_indexes:
+        if not 0 < name_index < len(utf8):
+            raise ValueError("invalid Java class-name index")
+        value = utf8[name_index]
+        if value is None:
+            raise ValueError("Java class name is not UTF-8")
+        if value.startswith("["):
+            references.update(re.findall(r"L([^;]+);", value))
+        else:
+            references.add(value)
+
+    # Field/method descriptors, generic signatures, and annotation descriptors
+    # normally live only in UTF-8 constants.  Including them catches the exact
+    # failure mode where a type is relocated in executable bytecode but remains
+    # at its old Better Lore name in a descriptor or signature.
+    for value in utf8:
+        if value is not None:
+            references.update(re.findall(r"L([A-Za-z0-9_$/]+)(?=[;<])", value))
+    return references
+
+
+def _skip_classfile_member(data: bytes, offset: int) -> int:
+    if offset + 8 > len(data):
+        raise ValueError("truncated Java class member")
+    attribute_count = int.from_bytes(data[offset + 6 : offset + 8], "big")
+    offset += 8
+    for _ in range(attribute_count):
+        if offset + 6 > len(data):
+            raise ValueError("truncated Java class attribute")
+        length = int.from_bytes(data[offset + 2 : offset + 6], "big")
+        offset += 6 + length
+        if offset > len(data):
+            raise ValueError("truncated Java class attribute payload")
+    return offset
+
+
+def _classfile_methods(data: bytes) -> tuple[int, set[tuple[str, str]]]:
+    major, utf8, _, offset = _classfile_layout(data)
+    if offset + 8 > len(data):
+        raise ValueError("truncated Java class declaration")
+    offset += 6  # access flags, this class, super class
+    interface_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2 + 2 * interface_count
+    if offset + 2 > len(data):
+        raise ValueError("truncated Java field table")
+    field_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    for _ in range(field_count):
+        offset = _skip_classfile_member(data, offset)
+    if offset + 2 > len(data):
+        raise ValueError("truncated Java method table")
+    method_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    methods: set[tuple[str, str]] = set()
+    for _ in range(method_count):
+        if offset + 8 > len(data):
+            raise ValueError("truncated Java method")
+        name_index = int.from_bytes(data[offset + 2 : offset + 4], "big")
+        descriptor_index = int.from_bytes(data[offset + 4 : offset + 6], "big")
+        if not (0 < name_index < len(utf8)) or not (0 < descriptor_index < len(utf8)):
+            raise ValueError("invalid Java method name or descriptor index")
+        name = utf8[name_index]
+        descriptor = utf8[descriptor_index]
+        if name is None or descriptor is None:
+            raise ValueError("Java method name or descriptor is not UTF-8")
+        methods.add((name, descriptor))
+        offset = _skip_classfile_member(data, offset)
+    return major, methods
+
+
+def _validate_better_lore_structural_references(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    """Reject dangling references between Better Lore classes in an adapter."""
+
+    missing_by_source: list[tuple[str, tuple[str, ...]]] = []
+    for class_path in sorted(name for name in names if name.endswith(".class")):
+        try:
+            references = _classfile_structural_references(archive.read(class_path))
+        except (KeyError, ValueError):
+            # The ordinary classfile validation emits the more direct parse
+            # error, so avoid duplicating it here.
+            continue
+        missing = tuple(
+            sorted(
+                reference + ".class"
+                for reference in references
+                if reference.startswith(_BETTER_LORE_INTERNAL_PREFIX)
+                and reference + ".class" not in names
+            )
+        )
+        if missing:
+            missing_by_source.append((class_path, missing))
+
+    if missing_by_source:
+        rendered = "; ".join(
+            f"{source} -> {', '.join(missing)}"
+            for source, missing in missing_by_source[:8]
+        )
+        errors.append(
+            f"{archive_label}: dangling Better Lore structural class reference(s): "
+            f"{rendered}"
+        )
+
+
+def _validate_adapter_classfiles(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    """Validate all adapter classfiles and their internal mod references."""
+
+    _validate_better_lore_structural_references(
+        archive, names, errors, archive_label
+    )
+    invalid_classfiles: list[str] = []
+    too_new: list[tuple[str, int]] = []
+    for class_path in sorted(name for name in names if name.endswith(".class")):
+        try:
+            major, _, _, _ = _classfile_layout(archive.read(class_path))
+        except (KeyError, ValueError) as error:
+            invalid_classfiles.append(f"{class_path} ({error})")
+            continue
+        if major > _JAVA_21_CLASSFILE_MAJOR:
+            too_new.append((class_path, major))
+    if invalid_classfiles:
+        errors.append(
+            f"{archive_label}: invalid classfile(s): "
+            f"{', '.join(invalid_classfiles[:8])}"
+        )
+    if too_new:
+        rendered = ", ".join(
+            f"{class_path} (major {major})" for class_path, major in too_new[:8]
+        )
+        errors.append(
+            f"{archive_label}: classfiles must target Java 21 (major <= "
+            f"{_JAVA_21_CLASSFILE_MAJOR}): {rendered}"
+        )
+
+
+def _validate_universal_jei_mixin_hook(
+    names: set[str],
+    configured_mixin_classes: set[str],
+    methods: set[tuple[str, str]],
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    """Require the transformation hook that makes the dual JEI ABI safe."""
+
+    required_methods = {
+        ("getPluginUid", _RESOURCE_LOCATION_RETURN),
+        ("getPluginUid", _IDENTIFIER_RETURN),
+    }
+    if not required_methods.issubset(methods):
+        return
+    if _JEI_COMPATIBILITY_MIXIN_CLASS_PATH not in names:
+        errors.append(
+            f"{archive_label}: universal dual-signature JEI plugin requires mixin class "
+            f"{_JEI_COMPATIBILITY_MIXIN_CLASS_PATH}"
+        )
+    if _JEI_COMPATIBILITY_MIXIN_CLASS_PATH not in configured_mixin_classes:
+        errors.append(
+            f"{archive_label}: universal dual-signature JEI plugin requires configured "
+            f"mixin hook {_JEI_COMPATIBILITY_MIXIN_CLASS}"
+        )
+
+
+def _generated_family_id(
+    class_path: str,
+    root_prefix: str,
+    loader: str,
+) -> str | None:
+    if not class_path.startswith(root_prefix):
+        return None
+    relative = class_path[len(root_prefix) :]
+    parts = relative.split("/")
+    if len(parts) < 3 or parts[0] != loader or not parts[1]:
+        return ""
+    return parts[1]
+
+
+def _validate_flat_adapter(
+    path: Path,
+    artifact: PublishedArtifact,
+    state,
+    mod_id: str,
+    mod_version: str,
+) -> list[str]:
+    errors: list[str] = []
+    label = f"{artifact.loader} flat adapter {artifact.label} ({path.name})"
+    families = _flat_adapter_families(artifact, errors, label)
+    expected_family_ids = {_adapter_family_id(family) for family in families}
+    min_format, min_minor, max_format, max_minor = _pack_bounds(state, artifact.versions)
+    jei_expected = any(
+        _jei_available(state, artifact.loader, version) for version in artifact.versions
+    )
+    errors.extend(
+        _validate_archive(
+            path,
+            Artifact(artifact.loader, artifact.anchor),
+            mod_id,
+            mod_version,
+            jei_expected,
+            min_format,
+            min_minor,
+            max_format,
+            max_minor,
+            minecraft_range=artifact.maven_range,
+            validate_jei_contract=False,
+            expected_service_providers={},
+        )
+    )
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = set(archive.namelist())
+            required_stable = {
+                *_COMPATIBILITY_RUNTIME_CLASSES,
+                _MIXIN_PLUGIN_CLASS_PATH,
+                _FML_BOOTSTRAP_CLASS[artifact.loader],
+            }
+            missing_stable = sorted(required_stable - names)
+            if missing_stable:
+                errors.append(
+                    f"{label}: missing stable adapter class(es): {', '.join(missing_stable)}"
+                )
+            _validate_adapter_classfiles(archive, names, errors, label)
+
+            manifest_text = _read_archive_text(
+                archive, "META-INF/MANIFEST.MF", errors, label
+            )
+            if manifest_text is not None:
+                main_section = manifest_text.replace("\r\n", "\n").split("\n\n", 1)[0]
+                if not re.search(
+                    rf"^MixinConfigs:\s*{re.escape(MIXIN_CONFIGURATION)}\s*$",
+                    main_section,
+                    re.MULTILINE,
+                ):
+                    errors.append(
+                        f"{label}: META-INF/MANIFEST.MF main section does not declare "
+                        f"{MIXIN_CONFIGURATION}"
+                    )
+
+            present_network_services = sorted(names & _NETWORK_SERVICE_RESOURCES)
+            if present_network_services:
+                errors.append(
+                    f"{label}: flat adapters must not contain networking ServiceLoader "
+                    f"resources: {', '.join(present_network_services)}"
+                )
+
+            generated_root = "com/reign/betterlore/compat/generated/"
+            loader_generated_root = generated_root + artifact.loader + "/"
+            generated_classes = {
+                name
+                for name in names
+                if name.startswith(generated_root) and name.endswith(".class")
+            }
+            generated_family_ids: set[str] = set()
+            for class_path in sorted(generated_classes):
+                family_id = _generated_family_id(
+                    class_path, generated_root, artifact.loader
+                )
+                if family_id is None:
+                    continue
+                if not family_id:
+                    errors.append(
+                        f"{label}: generated class uses a foreign or malformed adapter path: "
+                        f"{class_path}"
+                    )
+                    continue
+                generated_family_ids.add(family_id)
+            if generated_family_ids != expected_family_ids:
+                errors.append(
+                    f"{label}: generated implementation families are "
+                    f"{sorted(generated_family_ids)}, expected {sorted(expected_family_ids)}"
+                )
+
+            implementation_suffix = _FML_IMPLEMENTATION_CLASS[artifact.loader]
+            expected_implementations = {
+                f"{loader_generated_root}{family_id}/{implementation_suffix}"
+                for family_id in expected_family_ids
+            }
+            missing_implementations = sorted(expected_implementations - names)
+            if missing_implementations:
+                errors.append(
+                    f"{label}: missing generated FML implementation(s): "
+                    f"{', '.join(missing_implementations)}"
+                )
+            original_implementation = (
+                f"com/reign/betterlore/{implementation_suffix}"
+            )
+            if original_implementation in names:
+                errors.append(
+                    f"{label}: unrelocated FML implementation remains at "
+                    f"{original_implementation}"
+                )
+
+            mixin_text = _read_archive_text(
+                archive, MIXIN_CONFIGURATION, errors, label
+            )
+            configured_mixin_classes: set[str] = set()
+            configured_generated_mixins: set[str] = set()
+            configured_family_ids: set[str] = set()
+            if mixin_text is not None:
+                try:
+                    mixin_document = json.loads(mixin_text)
+                except json.JSONDecodeError:
+                    mixin_document = None
+                if _is_mapping(mixin_document):
+                    _require_equal(
+                        mixin_document.get("plugin"),
+                        _MIXIN_PLUGIN_CLASS,
+                        "plugin",
+                        MIXIN_CONFIGURATION,
+                        errors,
+                        label,
+                    )
+                    package = mixin_document.get("package")
+                    declared_entries: list[str] = []
+                    if isinstance(package, str):
+                        for side in ("mixins", "client", "server"):
+                            entries = mixin_document.get(side, [])
+                            if not isinstance(entries, list):
+                                continue
+                            for entry in entries:
+                                if not isinstance(entry, str):
+                                    continue
+                                class_name = _mixin_class_name(package, entry)
+                                class_path = class_name.replace(".", "/") + ".class"
+                                declared_entries.append(class_path)
+                                configured_mixin_classes.add(class_path)
+                                family_id = _generated_family_id(
+                                    class_path,
+                                    "com/reign/betterlore/mixin/generated/",
+                                    artifact.loader,
+                                )
+                                if family_id is None:
+                                    continue
+                                configured_generated_mixins.add(class_path)
+                                if not family_id:
+                                    errors.append(
+                                        f"{label}: mixin configuration uses a foreign or "
+                                        f"malformed generated path: {class_path}"
+                                    )
+                                else:
+                                    configured_family_ids.add(family_id)
+                    if len(declared_entries) != len(set(declared_entries)):
+                        errors.append(
+                            f"{label}: {MIXIN_CONFIGURATION} declares duplicate mixin classes"
+                        )
+
+            generated_mixin_root = "com/reign/betterlore/mixin/generated/"
+            generated_mixin_classes = {
+                name
+                for name in names
+                if name.startswith(generated_mixin_root) and name.endswith(".class")
+            }
+            generated_mixin_family_ids: set[str] = set()
+            for class_path in sorted(generated_mixin_classes):
+                family_id = _generated_family_id(
+                    class_path, generated_mixin_root, artifact.loader
+                )
+                if family_id is None:
+                    continue
+                if not family_id:
+                    errors.append(
+                        f"{label}: generated mixin uses a foreign or malformed path: {class_path}"
+                    )
+                else:
+                    generated_mixin_family_ids.add(family_id)
+            if generated_mixin_family_ids != expected_family_ids:
+                errors.append(
+                    f"{label}: generated mixin families are "
+                    f"{sorted(generated_mixin_family_ids)}, expected "
+                    f"{sorted(expected_family_ids)}"
+                )
+            if configured_family_ids != expected_family_ids:
+                errors.append(
+                    f"{label}: configured mixin families are "
+                    f"{sorted(configured_family_ids)}, expected {sorted(expected_family_ids)}"
+                )
+            top_level_generated_mixins = {
+                name
+                for name in generated_mixin_classes
+                if "$" not in name.rsplit("/", 1)[-1]
+            }
+            if top_level_generated_mixins != configured_generated_mixins:
+                missing_from_config = sorted(
+                    top_level_generated_mixins - configured_generated_mixins
+                )
+                missing_from_archive = sorted(
+                    configured_generated_mixins - top_level_generated_mixins
+                )
+                if missing_from_config:
+                    errors.append(
+                        f"{label}: generated mixin class(es) absent from config: "
+                        f"{', '.join(missing_from_config)}"
+                    )
+                if missing_from_archive:
+                    errors.append(
+                        f"{label}: configured generated mixin class(es) absent from archive: "
+                        f"{', '.join(missing_from_archive)}"
+                    )
+
+            jei_paths = sorted(
+                name for name in names if name.startswith(JEI_PLUGIN_CLASS_PATH[:-6])
+                and name.endswith(".class")
+            )
+            if jei_expected and JEI_PLUGIN_CLASS_PATH not in names:
+                errors.append(
+                    f"{label}: at least one retained family supports JEI but "
+                    f"{JEI_PLUGIN_CLASS_PATH} is absent"
+                )
+            elif not jei_expected and jei_paths:
+                errors.append(
+                    f"{label}: no retained family supports JEI but plugin class(es) are present: "
+                    f"{', '.join(jei_paths)}"
+                )
+
+            if JEI_PLUGIN_CLASS_PATH in names:
+                try:
+                    _, methods = _classfile_methods(archive.read(JEI_PLUGIN_CLASS_PATH))
+                except (KeyError, ValueError) as error:
+                    if artifact.loader == "neoforge" and "1.21.9" in artifact.versions:
+                        errors.append(
+                            f"{label}: cannot inspect universal JEI plugin ({error})"
+                        )
+                else:
+                    if artifact.loader == "neoforge" and "1.21.9" in artifact.versions:
+                        for descriptor in (
+                            _RESOURCE_LOCATION_RETURN,
+                            _IDENTIFIER_RETURN,
+                        ):
+                            if ("getPluginUid", descriptor) not in methods:
+                                errors.append(
+                                    f"{label}: universal NeoForge JEI plugin lacks "
+                                    f"getPluginUid{descriptor}"
+                                )
+                    _validate_universal_jei_mixin_hook(
+                        names,
+                        configured_mixin_classes,
+                        methods,
+                        errors,
+                        label,
+                    )
+    except (OSError, zipfile.BadZipFile) as error:
+        errors.append(f"{label}: invalid jar archive ({error})")
+
+    if path.stat().st_size > 2 * 1024 * 1024:
+        errors.append(f"{label}: flat adapter exceeds the 2 MiB storage budget")
+    return errors
+
+
 def _validate_compatibility_archive(
     path: Path,
     artifact: PublishedArtifact,
@@ -910,35 +1523,12 @@ def _validate_compatibility_archive(
 ) -> list[str]:
     if artifact.strategy == "fabric_bundle":
         return _validate_fabric_bundle(path, artifact, state, mod_id, mod_version, temporary)
-    min_format, min_minor, max_format, max_minor = _pack_bounds(state, artifact.versions)
-    jei_values = {_jei_available(state, artifact.loader, version) for version in artifact.versions}
-    errors: list[str] = []
-    if len(jei_values) != 1:
-        errors.append(
-            f"{artifact.loader} {artifact.label}: compatibility range crosses a JEI availability boundary"
-        )
-        jei = True
-    else:
-        jei = next(iter(jei_values))
-    errors.extend(
-        _validate_archive(
-            path,
-            Artifact(artifact.loader, artifact.anchor),
-            mod_id,
-            mod_version,
-            jei,
-            min_format,
-            min_minor,
-            max_format,
-            max_minor,
-            minecraft_range=artifact.maven_range,
-        )
-    )
-    if path.stat().st_size > 2 * 1024 * 1024:
-        errors.append(
-            f"{artifact.loader} {artifact.label} ({path.name}): range jar exceeds the 2 MiB storage budget"
-        )
-    return errors
+    if artifact.strategy != "flat_adapter":
+        return [
+            f"{artifact.loader} {artifact.label} ({path.name}): unknown publication "
+            f"strategy {artifact.strategy!r}"
+        ]
+    return _validate_flat_adapter(path, artifact, state, mod_id, mod_version)
 
 
 def _validate_manifest_v2(
@@ -1055,7 +1645,7 @@ def verify_release_jars(
     root: Path = ROOT,
     release_directory: Path | None = None,
 ) -> tuple[VerifiedArtifact, ...]:
-    """Validate the 24-file compatibility release and all 52 target mappings."""
+    """Validate the declared compatibility release and all 52 target mappings."""
 
     state = validate_matrix(root)
     if state.errors:

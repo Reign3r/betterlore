@@ -1,4 +1,5 @@
 import java.util.Properties
+import org.gradle.api.attributes.java.TargetJvmVersion
 
 plugins {
     java
@@ -26,7 +27,18 @@ java {
 
 tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    options.release.set(targetJava)
+    // Minecraft 26.x needs a JDK 25 toolchain to read its dependencies, but
+    // Better Lore itself uses no post-Java-21 language or JDK APIs. Emitting
+    // Java 21 classfiles lets one flat compatibility jar be scanned safely by
+    // both the Java 21 and Java 25 loader generations.
+    options.release.set(minOf(targetJava, 21))
+}
+
+// Gradle must still resolve the Java 25 Minecraft/loader variants used by
+// 26.x. This describes the JVM used to consume the compile classpath; it is
+// intentionally independent from the Java 21 bytecode emitted above.
+configurations.matching { it.name.endsWith("classpath", ignoreCase = true) }.configureEach {
+    attributes.attribute(TargetJvmVersion.TARGET_JVM_VERSION_ATTRIBUTE, targetJava)
 }
 
 tasks.withType<Test>().configureEach {

@@ -30,7 +30,7 @@ if (project.name == releaseCoordinator) {
     }
     tasks.register<Exec>("verifyReleaseMatrix") {
         group = "verification"
-        description = "Validates the 24-artifact compatibility partition."
+        description = "Validates the 5-artifact public compatibility partition."
         commandLine(pythonExecutable, rootProject.file("scripts/release_matrix.py").absolutePath)
     }
 }

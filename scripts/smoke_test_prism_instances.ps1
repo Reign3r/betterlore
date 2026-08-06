@@ -39,6 +39,10 @@ $fatalPatterns = @(
     'Some of your mods are incompatible',
     'ModLoadingException',
     'LoadingFailedException',
+    'Failed to wait for future Mod Construction',
+    'Failed to complete lifecycle event CONSTRUCT',
+    'Cowardly refusing to send event[^\r\n]*to a broken mod state',
+    'Preparing crash report with UUID',
     'Couldn''t load mod:(better_lore|better_lore_impl) pack metadata',
     '(?s:NoClassDefFoundError.{0,800}com[./]reign[./]betterlore)',
     '(?s:ClassNotFoundException.{0,800}com[./]reign[./]betterlore)',
@@ -46,6 +50,18 @@ $fatalPatterns = @(
     '(?im)^.*better_lore.*(?:failed|failure).*$'
 )
 $fatalRegex = [regex]::new(($fatalPatterns -join '|'), [Text.RegularExpressions.RegexOptions]::IgnoreCase)
+$benignOptionalJeiProbeRegex = [regex]::new(
+    'ClassNotFoundException:\s*com[./]reign[./]betterlore[./]compat[./]jei[./]BetterLoreJeiPlugin(?:\b|\$)',
+    [Text.RegularExpressions.RegexOptions]::IgnoreCase
+)
+
+function Get-FatalLogMatch([string]$Content) {
+    # @Pseudo mixins intentionally probe this optional target when JEI is absent.
+    # Remove only the exception token so a different Better Lore linkage error in
+    # the same log remains visible to the broad fatal signatures below.
+    $sanitizedContent = $benignOptionalJeiProbeRegex.Replace($Content, '')
+    return $fatalRegex.Match($sanitizedContent)
+}
 
 if (-not (Test-Path -LiteralPath $PrismLauncher -PathType Leaf)) {
     throw "PrismLauncher executable is missing: $PrismLauncher"
@@ -249,6 +265,33 @@ function Test-LogChanged([string]$Path, $Before, [DateTime]$Started) {
     return $item.Length -ne $Before.length -or $item.LastWriteTimeUtc.Ticks -ne $Before.write_ticks
 }
 
+function Get-CrashReportSnapshot([string]$Directory) {
+    $snapshot = @{}
+    if (Test-Path -LiteralPath $Directory -PathType Container) {
+        foreach ($item in Get-ChildItem -LiteralPath $Directory -Filter '*.txt' -File -ErrorAction SilentlyContinue) {
+            $snapshot[$item.FullName] = "$($item.Length):$($item.LastWriteTimeUtc.Ticks)"
+        }
+    }
+    return $snapshot
+}
+
+function Get-FreshCrashReport([string]$Directory, [hashtable]$Before, [DateTime]$Started) {
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        return $null
+    }
+    foreach ($item in Get-ChildItem -LiteralPath $Directory -Filter '*.txt' -File -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTimeUtc -Descending) {
+        if ($item.LastWriteTimeUtc -lt $Started.AddSeconds(-2)) {
+            continue
+        }
+        $signature = "$($item.Length):$($item.LastWriteTimeUtc.Ticks)"
+        if (-not $Before.ContainsKey($item.FullName) -or $Before[$item.FullName] -ne $signature) {
+            return $item.FullName
+        }
+    }
+    return $null
+}
+
 function Write-SmokeReport($ResultList, [object[]]$SelectedTargets, [DateTime]$RunStarted) {
     $resultArray = @($ResultList)
     $passedResults = @($resultArray | Where-Object { $_.status -eq 'passed' })
@@ -324,6 +367,7 @@ foreach ($target in $targets) {
     $mods = Join-Path $instance 'minecraft\mods'
     $log = Join-Path $instance 'minecraft\logs\latest.log'
     $debugLog = Join-Path $instance 'minecraft\logs\debug.log'
+    $crashReports = Join-Path $instance 'minecraft\crash-reports'
     $artifactPath = Join-Path $mods $target.file
     $artifactSha256 = [string]$artifactHashes[$target.file]
 
@@ -380,6 +424,7 @@ foreach ($target in $targets) {
             $baselinePrismIds = @(Get-PrismProcesses | Select-Object -ExpandProperty Id)
             $latestBefore = Get-LogSnapshot $log
             $debugBefore = Get-LogSnapshot $debugLog
+            $crashReportsBefore = Get-CrashReportSnapshot $crashReports
             $launchArguments = @('--launch', $instanceName)
             if ($OfflineName) {
                 $launchArguments += @('--offline', $OfflineName)
@@ -409,9 +454,14 @@ foreach ($target in $targets) {
                     $debugContent = [string](Get-Content -Raw -LiteralPath $debugLog)
                 }
                 $combinedContent = "$latestContent`n$debugContent"
-                $fatal = $fatalRegex.Match($combinedContent)
+                $fatal = Get-FatalLogMatch $combinedContent
                 if ($fatal.Success) {
                     $reason = "fatal log signature: $($fatal.Value -replace '\s+', ' ')"
+                    break
+                }
+                $freshCrashReport = Get-FreshCrashReport $crashReports $crashReportsBefore $started
+                if ($freshCrashReport) {
+                    $reason = "client generated a crash report: $freshCrashReport"
                     break
                 }
 
@@ -419,14 +469,14 @@ foreach ($target in $targets) {
                 if ($target.loader -eq 'fabric') {
                     $candidateLabel = [IO.Path]::GetFileNameWithoutExtension($target.nested_candidate).Replace('better-lore-impl-', '')
                     $modReady = $latestFresh -and
-                        $latestContent -match '(?m)^\s*-\s+better_lore\s+1\.1\.0\s*$' -and
-                        $latestContent -match [regex]::Escape("better_lore_impl 1.1.0+mc.$candidateLabel")
+                        $latestContent -match '(?m)^\s*-\s+better_lore\s+1\.2\.0\s*$' -and
+                        $latestContent -match [regex]::Escape("better_lore_impl 1.2.0+mc.$candidateLabel")
                 } else {
                     $fmlDiscoveryContent = "$latestContent`n$debugContent"
                     $modReady = ($latestFresh -or $debugFresh) -and
                         $fmlDiscoveryContent -match [regex]::Escape([string]$target.file) -and
                         ($fmlDiscoveryContent -match 'Found valid mod file[^\r\n]*\{better_lore\} mods' -or
-                            $fmlDiscoveryContent -match '(?m)^\s*Better Lore 1\.1\.0 \(better_lore\)\s*$')
+                            $fmlDiscoveryContent -match '(?m)^\s*Better Lore 1\.2\.0 \(better_lore\)\s*$')
                 }
 
                 if ($observedIds.Count -gt 0 -and $modReady -and $latestFresh -and $latestContent -match 'Sound engine started') {
@@ -439,9 +489,17 @@ foreach ($target in $targets) {
                     if (Test-Path -LiteralPath $debugLog -PathType Leaf) {
                         $debugContent = [string](Get-Content -Raw -LiteralPath $debugLog)
                     }
-                    $fatal = $fatalRegex.Match("$latestContent`n$debugContent")
+                    $freshCrashReport = Get-FreshCrashReport $crashReports $crashReportsBefore $started
+                    $aliveAfterReadiness = @(foreach ($id in $observedIds) {
+                        Get-Process -Id $id -ErrorAction SilentlyContinue
+                    })
+                    $fatal = Get-FatalLogMatch "$latestContent`n$debugContent"
                     if ($fatal.Success) {
                         $reason = "fatal log signature after readiness: $($fatal.Value -replace '\s+', ' ')"
+                    } elseif ($freshCrashReport) {
+                        $reason = "client generated a crash report after readiness: $freshCrashReport"
+                    } elseif ($aliveAfterReadiness.Count -eq 0) {
+                        $reason = 'client process exited during readiness confirmation'
                     } else {
                         $status = 'passed'
                         if ($launchRetried) {
@@ -451,7 +509,7 @@ foreach ($target in $targets) {
                             [void]$evidence.Add('Fabric discovered the public better_lore container')
                             [void]$evidence.Add("Fabric selected $($target.nested_candidate)")
                         } else {
-                            [void]$evidence.Add("$displayLoader found $($target.file) as valid better_lore mod 1.1.0")
+                            [void]$evidence.Add("$displayLoader found $($target.file) as valid better_lore mod 1.2.0")
                         }
                         [void]$evidence.Add('A Java process was correlated to the target instance')
                         [void]$evidence.Add("Java maximum heap is $ExpectedMaxMemoryMb MB")

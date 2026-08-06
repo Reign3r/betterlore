@@ -6,6 +6,11 @@ import com.reign.betterlore.net.ClientboundAnvilLoreStatePayload;
 import com.reign.betterlore.net.ServerboundAnvilLoreUpdatePayload;
 import com.reign.betterlore.net.ServerboundAnvilNameUpdatePayload;
 import net.minecraft.server.level.ServerPlayer;
+//? if >=1.21.11 {
+import net.minecraft.resources.Identifier;
+//? } else {
+import net.minecraft.resources.ResourceLocation;
+//? }
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.loading.FMLEnvironment;
 import net.minecraftforge.network.ChannelBuilder;
@@ -22,7 +27,13 @@ import net.minecraftforge.network.SimpleChannel;
  */
 public final class ForgeBetterLoreNetworkingPlatform implements BetterLoreNetworkingPlatform {
 	private static final int NETWORK_PROTOCOL = 1;
-	public static final SimpleChannel CHANNEL = ChannelBuilder.named(AnvilLoreNetworking.id("main"))
+	public static final SimpleChannel CHANNEL = ChannelBuilder.named(
+			//? if >=1.21.11 {
+			(Identifier) AnvilLoreNetworking.id("main")
+			//? } else {
+			(ResourceLocation) AnvilLoreNetworking.id("main")
+			//? }
+	)
 			.networkProtocolVersion(NETWORK_PROTOCOL)
 			.optional()
 			.simpleChannel();

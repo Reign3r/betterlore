@@ -1,8 +1,8 @@
 package com.reign.betterlore.compat.jei;
 
-import com.reign.betterlore.AnvilLoreMod;
 import com.reign.betterlore.access.AnvilLoreScreenBridge;
 import com.reign.betterlore.access.RecipeViewerArea;
+import com.reign.betterlore.net.NetworkIdentifiers;
 import mezz.jei.api.IModPlugin;
 import mezz.jei.api.JeiPlugin;
 import mezz.jei.api.gui.handlers.IGuiContainerHandler;
@@ -20,25 +20,19 @@ import java.util.List;
 @JeiPlugin
 public final class BetterLoreJeiPlugin implements IModPlugin {
 	//? if >=1.21.11 {
-	private static final Identifier UID = Identifier.fromNamespaceAndPath(AnvilLoreMod.MOD_ID, "jei");
-
 	@Override
 	public Identifier getPluginUid() {
-		return UID;
+		return (Identifier) NetworkIdentifiers.create("jei");
 	}
 	//? } else if >=1.21 {
-	private static final ResourceLocation UID = ResourceLocation.fromNamespaceAndPath(AnvilLoreMod.MOD_ID, "jei");
-
 	@Override
 	public ResourceLocation getPluginUid() {
-		return UID;
+		return (ResourceLocation) NetworkIdentifiers.create("jei");
 	}
 	//? } else {
-	private static final ResourceLocation UID = new ResourceLocation(AnvilLoreMod.MOD_ID, "jei");
-
 	@Override
 	public ResourceLocation getPluginUid() {
-		return UID;
+		return (ResourceLocation) NetworkIdentifiers.create("jei");
 	}
 	//? }
 

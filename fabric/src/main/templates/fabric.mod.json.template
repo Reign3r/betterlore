@@ -11,10 +11,10 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "com.reign.betterlore.fabric.BetterLoreFabricMod"
+      "com.reign.betterlore.fabric.BetterLoreFabricBootstrap"
     ],
     "client": [
-      "com.reign.betterlore.fabric.BetterLoreFabricClientMod"
+      "com.reign.betterlore.fabric.BetterLoreFabricClientBootstrap"
     ],
     "rei_client": [
       "com.reign.betterlore.compat.rei.BetterLoreReiPlugin"

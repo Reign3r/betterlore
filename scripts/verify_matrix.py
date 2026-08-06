@@ -387,7 +387,14 @@ def _validate_sources(root: Path, errors: list[str]) -> None:
     for path in common_java.rglob("*.java"):
         text = path.read_text(encoding="utf-8", errors="ignore")
         for forbidden in ("net.fabricmc.", "net.minecraftforge.", "net.neoforged."):
-            if forbidden in text:
+            # Reflection-only class names are intentionally loader-neutral and
+            # safe in common code. Reject actual Java imports, which create a
+            # compile/link dependency on a loader API.
+            if re.search(
+                rf"^\s*import\s+(?:static\s+)?{re.escape(forbidden)}",
+                text,
+                flags=re.MULTILINE,
+            ):
                 errors.append(f"Loader import leaked into common: {path.relative_to(root)} -> {forbidden}")
 
 

@@ -8,27 +8,19 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 
 public record ServerboundAnvilLoreUpdatePayload(int containerId, int sessionId, String rawLoreMarkup) implements CustomPacketPayload {
 	public static final CustomPacketPayload.Type<ServerboundAnvilLoreUpdatePayload> TYPE =
-			new CustomPacketPayload.Type<>(AnvilLoreNetworking.id("anvil_lore_update"));
+			NetworkIdentifiers.payloadType("anvil_lore_update");
 	public static final StreamCodec<RegistryFriendlyByteBuf, ServerboundAnvilLoreUpdatePayload> CODEC =
 			CustomPacketPayload.codec(ServerboundAnvilLoreUpdatePayload::write, ServerboundAnvilLoreUpdatePayload::read);
 
 	public void write(FriendlyByteBuf buf) {
-		//? if >=1.21.5 {
-		buf.writeContainerId(containerId);
-		//? } else {
 		buf.writeVarInt(containerId);
-		//? }
 		buf.writeVarInt(sessionId);
 		buf.writeUtf(rawLoreMarkup, LoreMarkupParser.MAX_RAW_CHARS);
 	}
 
 	public static ServerboundAnvilLoreUpdatePayload read(FriendlyByteBuf buf) {
 		return new ServerboundAnvilLoreUpdatePayload(
-				//? if >=1.21.5 {
-				buf.readContainerId(),
-				//? } else {
 				buf.readVarInt(),
-				//? }
 				buf.readVarInt(),
 				buf.readUtf(LoreMarkupParser.MAX_RAW_CHARS)
 		);

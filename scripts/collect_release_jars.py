@@ -23,6 +23,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from release_matrix import (
     FABRIC_FAMILIES,
+    FAMILIES_BY_LOADER,
     PublishedArtifact,
     fabric_inner_path,
     published_artifacts,
@@ -218,6 +219,26 @@ _FORBIDDEN_RUNTIME_ASSETS = frozenset(
     }
 )
 _MANIFEST = "META-INF/MANIFEST.MF"
+_MOD_CLASS_PREFIX = "com/reign/betterlore/"
+_JEI_PLUGIN_PREFIX = "com/reign/betterlore/compat/jei/BetterLoreJeiPlugin"
+_NETWORK_SERVICE_NAMES = frozenset(
+    {
+        "META-INF/services/com.reign.betterlore.client.net.BetterLoreClientNetworkingPlatform",
+        "META-INF/services/com.reign.betterlore.net.BetterLoreNetworkingPlatform",
+    }
+)
+_SHARED_COMPATIBILITY_CLASSES = frozenset(
+    {
+        "com/reign/betterlore/compat/CompatibilityRuntime.class",
+        "com/reign/betterlore/compat/CompatibilityRuntime$Selection.class",
+        "com/reign/betterlore/compat/BetterLoreMixinPlugin.class",
+        "com/reign/betterlore/mixin/compat/BetterLoreJeiPluginCompatibilityMixin.class",
+        "com/reign/betterlore/fabric/BetterLoreFabricBootstrap.class",
+        "com/reign/betterlore/fabric/BetterLoreFabricClientBootstrap.class",
+        "com/reign/betterlore/forge/BetterLoreForgeBootstrap.class",
+        "com/reign/betterlore/neoforge/BetterLoreNeoForgeBootstrap.class",
+    }
+)
 
 
 def _zip_info(name: str, *, stored: bool = False) -> zipfile.ZipInfo:
@@ -324,6 +345,510 @@ def _rewrite_archive(
                 f"{source}: cannot replace missing archive entries: {', '.join(missing)}"
             )
     return output.getvalue()
+
+
+def _constant_pool_layout(data: bytes) -> tuple[list[str | None], list[int], int]:
+    """Return UTF-8 values, CONSTANT_Class name indexes, and pool end offset."""
+
+    if len(data) < 10 or data[:4] != b"\xca\xfe\xba\xbe":
+        raise CollectionError("invalid Java classfile")
+    count = int.from_bytes(data[8:10], "big")
+    utf8: list[str | None] = [None] * count
+    class_names: list[int] = []
+    offset = 10
+    index = 1
+    fixed_sizes = {
+        3: 4,
+        4: 4,
+        5: 8,
+        6: 8,
+        7: 2,
+        8: 2,
+        9: 4,
+        10: 4,
+        11: 4,
+        12: 4,
+        15: 3,
+        16: 2,
+        17: 4,
+        18: 4,
+        19: 2,
+        20: 2,
+    }
+    while index < count:
+        if offset >= len(data):
+            raise CollectionError("truncated Java constant pool")
+        tag = data[offset]
+        offset += 1
+        if tag == 1:
+            if offset + 2 > len(data):
+                raise CollectionError("truncated Java UTF-8 constant")
+            length = int.from_bytes(data[offset : offset + 2], "big")
+            offset += 2
+            raw = data[offset : offset + length]
+            if len(raw) != length:
+                raise CollectionError("truncated Java UTF-8 payload")
+            utf8[index] = raw.decode("utf-8", errors="surrogateescape")
+            offset += length
+        else:
+            size = fixed_sizes.get(tag)
+            if size is None or offset + size > len(data):
+                raise CollectionError(f"unsupported or truncated Java constant-pool tag {tag}")
+            if tag == 7:
+                class_names.append(int.from_bytes(data[offset : offset + 2], "big"))
+            offset += size
+            if tag in (5, 6):
+                index += 1
+        index += 1
+    return utf8, class_names, offset
+
+
+def _class_references(data: bytes) -> set[str]:
+    utf8, class_names, _ = _constant_pool_layout(data)
+    references: set[str] = set()
+    for name_index in class_names:
+        if not 0 < name_index < len(utf8):
+            continue
+        value = utf8[name_index]
+        if value is None:
+            continue
+        if value.startswith("["):
+            references.update(re.findall(r"L([^;]+);", value))
+        else:
+            references.add(value)
+
+    # Method/field descriptors and generic signatures normally live only in
+    # CONSTANT_Utf8 entries, not CONSTANT_Class entries.  They must participate
+    # in the relocation closure too: otherwise an interface can remain in the
+    # original package while its payload types move, or a relocated class can
+    # lose access to a package-private implementation.  Stop at either a
+    # descriptor terminator or a generic-type opener so nested signatures are
+    # collected without swallowing their type arguments.
+    for value in utf8:
+        if value is None:
+            continue
+        references.update(
+            re.findall(r"L([A-Za-z0-9_$/]+)(?=[;<])", value)
+        )
+    return references
+
+
+def _rewrite_class_names(data: bytes, mapping: dict[str, str]) -> bytes:
+    """Relocate class references by rewriting every matching UTF-8 constant."""
+
+    _constant_pool_layout(data)
+    count = int.from_bytes(data[8:10], "big")
+    output = bytearray(data[:10])
+    offset = 10
+    index = 1
+    replacements = tuple(
+        (old, new, old.replace("/", "."), new.replace("/", "."))
+        for old, new in sorted(mapping.items(), key=lambda entry: len(entry[0]), reverse=True)
+    )
+    fixed_sizes = {
+        3: 4,
+        4: 4,
+        5: 8,
+        6: 8,
+        7: 2,
+        8: 2,
+        9: 4,
+        10: 4,
+        11: 4,
+        12: 4,
+        15: 3,
+        16: 2,
+        17: 4,
+        18: 4,
+        19: 2,
+        20: 2,
+    }
+    while index < count:
+        tag = data[offset]
+        output.append(tag)
+        offset += 1
+        if tag == 1:
+            length = int.from_bytes(data[offset : offset + 2], "big")
+            offset += 2
+            value = data[offset : offset + length].decode("utf-8", errors="surrogateescape")
+            offset += length
+            for old, new, dotted_old, dotted_new in replacements:
+                value = value.replace(old, new).replace(dotted_old, dotted_new)
+            encoded = value.encode("utf-8", errors="surrogateescape")
+            if len(encoded) > 0xFFFF:
+                raise CollectionError("relocated Java UTF-8 constant exceeds 65535 bytes")
+            output.extend(len(encoded).to_bytes(2, "big"))
+            output.extend(encoded)
+        else:
+            size = fixed_sizes[tag]
+            output.extend(data[offset : offset + size])
+            offset += size
+            if tag in (5, 6):
+                index += 1
+        index += 1
+    output.extend(data[offset:])
+    return bytes(output)
+
+
+def _adapter_family_id(family: tuple[str, ...]) -> str:
+    label = version_label(family).replace(".", "_").replace("-", "_")
+    return "mc" + label
+
+
+def _relocated_internal_name(loader: str, family: tuple[str, ...], internal_name: str) -> str:
+    family_id = _adapter_family_id(family)
+    mixin_prefix = "com/reign/betterlore/mixin/"
+    if internal_name.startswith(mixin_prefix):
+        relative = internal_name[len(mixin_prefix) :]
+        return f"{mixin_prefix}generated/{loader}/{family_id}/{relative}"
+    if not internal_name.startswith(_MOD_CLASS_PREFIX):
+        raise CollectionError(f"cannot relocate non-mod class {internal_name}")
+    relative = internal_name[len(_MOD_CLASS_PREFIX) :]
+    return (
+        f"com/reign/betterlore/compat/generated/{loader}/{family_id}/{relative}"
+    )
+
+
+def _family_archives(
+    artifact: PublishedArtifact,
+    selected: dict[tuple[str, str], Path],
+) -> list[tuple[tuple[str, ...], Path, dict[str, bytes]]]:
+    _assert_flat_resource_payload(artifact, selected)
+    families = [
+        family
+        for family in FAMILIES_BY_LOADER[artifact.loader]
+        if all(version in artifact.versions for version in family)
+    ]
+    covered = tuple(version for family in families for version in family)
+    if covered != artifact.versions:
+        raise CollectionError(
+            f"{artifact.loader} {artifact.label}: binary families cover {covered}, expected {artifact.versions}"
+        )
+    result: list[tuple[tuple[str, ...], Path, dict[str, bytes]]] = []
+    for family in families:
+        _assert_family_payload(artifact.loader, family, selected)
+        source = selected[(artifact.loader, family[0])]
+        with zipfile.ZipFile(source) as archive:
+            classes = {
+                info.filename: archive.read(info)
+                for info in archive.infolist()
+                if not info.is_dir()
+                and info.filename.startswith(_MOD_CLASS_PREFIX)
+                and info.filename.endswith(".class")
+            }
+        result.append((family, source, classes))
+    return result
+
+
+def _flat_resource_payload(path: Path, loader: str) -> dict[str, str]:
+    """Hash resources that a flat adapter copies verbatim from its anchor."""
+
+    descriptor = "META-INF/mods.toml" if loader == "forge" else "META-INF/neoforge.mods.toml"
+    ignored = {
+        _MANIFEST,
+        "pack.mcmeta",
+        descriptor,
+        *_NETWORK_SERVICE_NAMES,
+        *_FORBIDDEN_RUNTIME_ASSETS,
+    }
+    with zipfile.ZipFile(path) as archive:
+        return {
+            info.filename: hashlib.sha256(archive.read(info)).hexdigest()
+            for info in archive.infolist()
+            if not info.is_dir()
+            and not info.filename.endswith(".class")
+            and info.filename not in ignored
+        }
+
+
+def _assert_flat_resource_payload(
+    artifact: PublishedArtifact,
+    selected: dict[tuple[str, str], Path],
+) -> None:
+    """Reject family resources/configuration that the flat adapter cannot merge."""
+
+    anchor = selected[(artifact.loader, artifact.versions[0])]
+    expected = _flat_resource_payload(anchor, artifact.loader)
+    for version in artifact.versions[1:]:
+        candidate = selected[(artifact.loader, version)]
+        actual = _flat_resource_payload(candidate, artifact.loader)
+        if actual == expected:
+            continue
+        changed = sorted(
+            name
+            for name in set(expected) | set(actual)
+            if expected.get(name) != actual.get(name)
+        )
+        rendered = ", ".join(changed[:8])
+        if len(changed) > 8:
+            rendered += ", ..."
+        raise CollectionError(
+            f"{artifact.loader} {artifact.label}: {version} has resources that differ "
+            f"from {artifact.versions[0]} and cannot be copied safely: {rendered}"
+        )
+
+
+def _variant_class_paths(
+    archives: list[tuple[tuple[str, ...], Path, dict[str, bytes]]],
+    loader: str,
+) -> set[str]:
+    special = set(_SHARED_COMPATIBILITY_CLASSES)
+    all_paths = set().union(*(set(classes) for _, _, classes in archives))
+    plugin_paths = {path for path in all_paths if path.startswith(_JEI_PLUGIN_PREFIX)}
+    candidates = all_paths - special - plugin_paths
+    variants = {
+        path
+        for path in candidates
+        if len(
+            {
+                hashlib.sha256(classes[path]).hexdigest() if path in classes else None
+                for _, _, classes in archives
+            }
+        )
+        > 1
+    }
+    implementation_suffix = (
+        "forge/BetterLoreForgeMod.class"
+        if loader == "forge"
+        else "neoforge/BetterLoreNeoForgeMod.class"
+    )
+    variants.update(path for path in candidates if path.endswith(implementation_suffix))
+
+    changed = True
+    while changed:
+        changed = False
+        variant_names = {path[:-6] for path in variants}
+        for path in sorted(candidates - variants):
+            references = set().union(
+                *(
+                    _class_references(classes[path])
+                    for _, _, classes in archives
+                    if path in classes
+                )
+            )
+            if references & variant_names:
+                variants.add(path)
+                changed = True
+
+        outer_names = {path[:-6].split("$", 1)[0] for path in variants}
+        nestmates = {
+            path
+            for path in candidates - variants
+            if path[:-6].split("$", 1)[0] in outer_names
+        }
+        if nestmates:
+            variants.update(nestmates)
+            changed = True
+    return variants
+
+
+def _mixin_configuration(
+    source: Path,
+    loader: str,
+    archives: list[tuple[tuple[str, ...], Path, dict[str, bytes]]],
+    variant_paths: set[str],
+) -> bytes:
+    with zipfile.ZipFile(source) as archive:
+        descriptor = json.loads(archive.read("better_lore.mixins.json").decode("utf-8"))
+    original_package = descriptor["package"]
+    descriptor["plugin"] = "com.reign.betterlore.compat.BetterLoreMixinPlugin"
+    for side in ("mixins", "client", "server"):
+        entries = descriptor.get(side)
+        if not isinstance(entries, list):
+            continue
+        rewritten: list[str] = []
+        for entry in entries:
+            internal = original_package.replace(".", "/") + "/" + entry.replace(".", "/")
+            path = internal + ".class"
+            if path not in variant_paths:
+                rewritten.append(entry)
+                continue
+            for family, _, classes in archives:
+                if path not in classes:
+                    continue
+                relocated = _relocated_internal_name(loader, family, internal)
+                prefix = original_package.replace(".", "/") + "/"
+                rewritten.append(relocated[len(prefix) :].replace("/", "."))
+        descriptor[side] = rewritten
+    return (json.dumps(descriptor, indent=2) + "\n").encode("utf-8")
+
+
+def _manifest_with_mixin_config(source: Path) -> bytes:
+    with zipfile.ZipFile(source) as archive:
+        text = archive.read(_MANIFEST).decode("utf-8").replace("\r\n", "\n")
+    lines = text.splitlines()
+    separator = next((index for index, line in enumerate(lines) if not line), len(lines))
+    main = [
+        line
+        for line in lines[:separator]
+        if not line.startswith("MixinConfigs:")
+    ]
+    remainder = lines[separator + 1 :] if separator < len(lines) else []
+    while remainder and not remainder[-1]:
+        remainder.pop()
+
+    main.append("MixinConfigs: better_lore.mixins.json")
+    rewritten = main + [""]
+    if remainder:
+        rewritten.extend(remainder)
+        rewritten.append("")
+    return ("\r\n".join(rewritten) + "\r\n").encode("utf-8")
+
+
+def _skip_member(data: bytes, offset: int) -> int:
+    if offset + 8 > len(data):
+        raise CollectionError("truncated Java class member")
+    attribute_count = int.from_bytes(data[offset + 6 : offset + 8], "big")
+    offset += 8
+    for _ in range(attribute_count):
+        if offset + 6 > len(data):
+            raise CollectionError("truncated Java class attribute")
+        length = int.from_bytes(data[offset + 2 : offset + 6], "big")
+        offset += 6 + length
+        if offset > len(data):
+            raise CollectionError("truncated Java class attribute payload")
+    return offset
+
+
+def _add_identifier_jei_method(data: bytes) -> bytes:
+    """Add JEI's post-1.21.10 return descriptor to the pre-rename plugin.
+
+    Java source cannot declare two methods which differ only by return type,
+    while JVM bytecode can. JEI changed IModPlugin#getPluginUid from
+    ResourceLocation to Identifier without changing the interface name. This
+    tiny bridge keeps one annotated plugin class valid on both sides.
+    """
+
+    utf8, _, pool_end = _constant_pool_layout(data)
+    identifier_descriptor = "()Lnet/minecraft/resources/Identifier;"
+    if identifier_descriptor in utf8:
+        return data
+
+    old_count = int.from_bytes(data[8:10], "big")
+    additions: list[bytes] = []
+
+    def add_utf8(value: str) -> int:
+        encoded = value.encode("utf-8")
+        index = old_count + len(additions)
+        additions.append(b"\x01" + len(encoded).to_bytes(2, "big") + encoded)
+        return index
+
+    def add_class(name_index: int) -> int:
+        index = old_count + len(additions)
+        additions.append(b"\x07" + name_index.to_bytes(2, "big"))
+        return index
+
+    def add_string(value_index: int) -> int:
+        index = old_count + len(additions)
+        additions.append(b"\x08" + value_index.to_bytes(2, "big"))
+        return index
+
+    def add_name_and_type(name_index: int, descriptor_index: int) -> int:
+        index = old_count + len(additions)
+        additions.append(
+            b"\x0c" + name_index.to_bytes(2, "big") + descriptor_index.to_bytes(2, "big")
+        )
+        return index
+
+    def add_method_ref(class_index: int, name_and_type_index: int) -> int:
+        index = old_count + len(additions)
+        additions.append(
+            b"\x0a" + class_index.to_bytes(2, "big") + name_and_type_index.to_bytes(2, "big")
+        )
+        return index
+
+    method_name = add_utf8("getPluginUid")
+    method_descriptor = add_utf8(identifier_descriptor)
+    code_name = add_utf8("Code")
+    identifier_name = add_utf8("net/minecraft/resources/Identifier")
+    identifier_class = add_class(identifier_name)
+    path_value = add_utf8("jei")
+    path_string = add_string(path_value)
+    factory_owner_name = add_utf8("com/reign/betterlore/net/NetworkIdentifiers")
+    factory_owner = add_class(factory_owner_name)
+    factory_name = add_utf8("create")
+    factory_descriptor = add_utf8("(Ljava/lang/String;)Ljava/lang/Object;")
+    factory_name_and_type = add_name_and_type(factory_name, factory_descriptor)
+    factory_method = add_method_ref(factory_owner, factory_name_and_type)
+
+    if path_string <= 0xFF:
+        code = b"\x12" + bytes((path_string,))
+    else:
+        code = b"\x13" + path_string.to_bytes(2, "big")
+    code += b"\xb8" + factory_method.to_bytes(2, "big")
+    code += b"\xc0" + identifier_class.to_bytes(2, "big") + b"\xb0"
+    code_body = (
+        (1).to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + len(code).to_bytes(4, "big")
+        + code
+        + (0).to_bytes(2, "big")
+        + (0).to_bytes(2, "big")
+    )
+    method = (
+        (0x0001).to_bytes(2, "big")
+        + method_name.to_bytes(2, "big")
+        + method_descriptor.to_bytes(2, "big")
+        + (1).to_bytes(2, "big")
+        + code_name.to_bytes(2, "big")
+        + len(code_body).to_bytes(4, "big")
+        + code_body
+    )
+
+    new_count = old_count + len(additions)
+    rebuilt = data[:8] + new_count.to_bytes(2, "big") + data[10:pool_end] + b"".join(additions) + data[pool_end:]
+    _, _, new_pool_end = _constant_pool_layout(rebuilt)
+    offset = new_pool_end + 6
+    interface_count = int.from_bytes(rebuilt[offset : offset + 2], "big")
+    offset += 2 + 2 * interface_count
+    field_count = int.from_bytes(rebuilt[offset : offset + 2], "big")
+    offset += 2
+    for _ in range(field_count):
+        offset = _skip_member(rebuilt, offset)
+    method_count_offset = offset
+    method_count = int.from_bytes(rebuilt[offset : offset + 2], "big")
+    offset += 2
+    for _ in range(method_count):
+        offset = _skip_member(rebuilt, offset)
+    return (
+        rebuilt[:method_count_offset]
+        + (method_count + 1).to_bytes(2, "big")
+        + rebuilt[method_count_offset + 2 : offset]
+        + method
+        + rebuilt[offset:]
+    )
+
+
+def _universal_jei_classes(
+    artifact: PublishedArtifact,
+    archives: list[tuple[tuple[str, ...], Path, dict[str, bytes]]],
+) -> dict[str, bytes]:
+    candidates = [
+        (family, classes)
+        for family, _, classes in archives
+        if _JEI_PLUGIN_PREFIX + ".class" in classes
+    ]
+    if not candidates:
+        return {}
+
+    if artifact.loader == "neoforge" and "1.21.9" in artifact.versions:
+        selected_family, selected_classes = next(
+            (family, classes)
+            for family, classes in candidates
+            if "1.21.9" in family
+        )
+    else:
+        selected_family, selected_classes = candidates[-1]
+
+    plugin = {
+        path: data
+        for path, data in selected_classes.items()
+        if path.startswith(_JEI_PLUGIN_PREFIX)
+    }
+    outer_path = _JEI_PLUGIN_PREFIX + ".class"
+    if artifact.loader == "neoforge" and "1.21.9" in artifact.versions:
+        plugin[outer_path] = _add_identifier_jei_method(plugin[outer_path])
+    return plugin
 
 
 def _pack_metadata(state, versions: tuple[str, ...]) -> bytes:
@@ -520,6 +1045,111 @@ def _build_range_artifact(
     target.write_bytes(data)
 
 
+def _build_flat_adapter(
+    state,
+    artifact: PublishedArtifact,
+    selected: dict[tuple[str, str], Path],
+    target: Path,
+) -> None:
+    archives = _family_archives(artifact, selected)
+    variant_paths = _variant_class_paths(archives, artifact.loader)
+    first_source = archives[0][1]
+    descriptor_name = (
+        "META-INF/mods.toml"
+        if artifact.loader == "forge"
+        else "META-INF/neoforge.mods.toml"
+    )
+    with zipfile.ZipFile(first_source) as archive:
+        descriptor = archive.read(descriptor_name).decode("utf-8")
+    descriptor = _replace_minecraft_range(
+        descriptor, artifact.anchor, artifact.maven_range, first_source
+    )
+    if 'logoFile = "assets/better_lore/icon.jpg"' not in descriptor:
+        marker = 'displayURL = "https://github.com/Reign3r/betterlore"\n'
+        if descriptor.count(marker) != 1:
+            raise CollectionError(f"{first_source}: could not add the runtime icon declaration")
+        descriptor = descriptor.replace(
+            marker,
+            marker + 'logoFile = "assets/better_lore/icon.jpg"\n',
+            1,
+        )
+
+    replacements = {
+        descriptor_name: descriptor.encode("utf-8"),
+        "pack.mcmeta": _pack_metadata(state, artifact.versions),
+        "better_lore.mixins.json": _mixin_configuration(
+            first_source, artifact.loader, archives, variant_paths
+        ),
+        _MANIFEST: _manifest_with_mixin_config(first_source),
+    }
+    ignored = {
+        descriptor_name,
+        "pack.mcmeta",
+        "better_lore.mixins.json",
+        _MANIFEST,
+        *_NETWORK_SERVICE_NAMES,
+    }
+    output_entries: dict[str, bytes] = {}
+
+    with zipfile.ZipFile(first_source) as source_archive:
+        for info in source_archive.infolist():
+            path = info.filename
+            if info.is_dir() or path in ignored or path in _FORBIDDEN_RUNTIME_ASSETS:
+                continue
+            if path.startswith(_MOD_CLASS_PREFIX) and path.endswith(".class"):
+                continue
+            output_entries[path] = source_archive.read(info)
+    output_entries.update(replacements)
+
+    all_paths = set().union(*(set(classes) for _, _, classes in archives))
+    plugin_paths = {path for path in all_paths if path.startswith(_JEI_PLUGIN_PREFIX)}
+    shared_paths = all_paths - variant_paths - plugin_paths
+    for path in sorted(shared_paths):
+        bodies = [classes[path] for _, _, classes in archives if path in classes]
+        if not bodies:
+            continue
+        if len(bodies) != len(archives):
+            raise CollectionError(
+                f"{artifact.loader} {artifact.label}: shared class {path} is absent from a binary family"
+            )
+        if path not in _SHARED_COMPATIBILITY_CLASSES and len(
+            {hashlib.sha256(body).hexdigest() for body in bodies}
+        ) != 1:
+            raise CollectionError(
+                f"{artifact.loader} {artifact.label}: non-identical class escaped adapter relocation: {path}"
+            )
+        output_entries[path] = bodies[0]
+
+    for family, _, classes in archives:
+        internal_mapping = {
+            path[:-6]: _relocated_internal_name(artifact.loader, family, path[:-6])
+            for path in variant_paths
+            if path in classes
+        }
+        for path in sorted(variant_paths):
+            data = classes.get(path)
+            if data is None:
+                continue
+            relocated_internal = internal_mapping[path[:-6]]
+            relocated_path = relocated_internal + ".class"
+            if relocated_path in output_entries:
+                raise CollectionError(
+                    f"{artifact.loader} {artifact.label}: duplicate relocated class {relocated_path}"
+                )
+            output_entries[relocated_path] = _rewrite_class_names(data, internal_mapping)
+
+    for path, data in _universal_jei_classes(artifact, archives).items():
+        if path in output_entries:
+            raise CollectionError(
+                f"{artifact.loader} {artifact.label}: duplicate universal JEI class {path}"
+            )
+        output_entries[path] = data
+
+    with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for path in sorted(output_entries):
+            archive.writestr(_zip_info(path), output_entries[path])
+
+
 def _source_proofs(
     root: Path,
     artifact: PublishedArtifact,
@@ -647,7 +1277,7 @@ def _publish(staging: Path, destination: Path) -> None:
 
 
 def collect_release_jars(root: Path = ROOT, destination: Path | None = None) -> list[CollectedArtifact]:
-    """Validate all compile outputs and publish the 24 compatibility artifacts."""
+    """Validate all compile outputs and publish the five compatibility artifacts."""
 
     state = validate_matrix(root)
     if state.errors:
@@ -702,8 +1332,12 @@ def collect_release_jars(root: Path = ROOT, destination: Path | None = None) -> 
                 _build_fabric_bundle(
                     state, artifact, selected, target, mod_id, mod_version
                 )
+            elif artifact.strategy == "flat_adapter":
+                _build_flat_adapter(state, artifact, selected, target)
             else:
-                _build_range_artifact(state, artifact, selected, target)
+                raise CollectionError(
+                    f"unsupported release strategy {artifact.strategy!r} for {artifact.loader}"
+                )
             records.append(
                 CollectedArtifact(
                     loader=artifact.loader,

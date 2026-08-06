@@ -449,7 +449,7 @@ def provision(instances_root: Path, gradle_cache_root: Path) -> tuple[int, list[
 
         expected_mods: list[tuple[Path, str]] = [(better_lore, better_lore.name)]
         notes = [
-            "Better Lore 1.1.0 test instance",
+            "Better Lore 1.2.0 test instance",
             f"Minecraft: {minecraft}",
             f"Loader: {display_loader} {resolved_loader_version}",
             f"Compatibility artifact: {better_lore.name}",

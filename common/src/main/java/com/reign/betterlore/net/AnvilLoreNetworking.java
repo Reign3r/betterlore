@@ -1,53 +1,37 @@
 package com.reign.betterlore.net;
 
-import com.reign.betterlore.AnvilLoreMod;
 import com.reign.betterlore.access.AnvilLoreMenuBridge;
-//? if >=1.21.11 {
-import net.minecraft.resources.Identifier;
-//? } else {
-import net.minecraft.resources.ResourceLocation;
-//? }
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.inventory.AnvilMenu;
 
-import java.util.Iterator;
-import java.util.ServiceConfigurationError;
-import java.util.ServiceLoader;
-
 public final class AnvilLoreNetworking {
-	private static final BetterLoreNetworkingPlatform PLATFORM = loadPlatform();
+	private static BetterLoreNetworkingPlatform platform = new NoopBetterLoreNetworkingPlatform();
 
 	private AnvilLoreNetworking() {
 	}
 
-	//? if >=1.21.11 {
-	public static Identifier id(String path) {
-		return Identifier.fromNamespaceAndPath(AnvilLoreMod.MOD_ID, path);
+	public static Object id(String path) {
+		return NetworkIdentifiers.create(path);
 	}
-	//? } else if >=1.21 {
-	public static ResourceLocation id(String path) {
-		return ResourceLocation.fromNamespaceAndPath(AnvilLoreMod.MOD_ID, path);
+
+	public static void installPlatform(BetterLoreNetworkingPlatform installedPlatform) {
+		platform = installedPlatform == null ? new NoopBetterLoreNetworkingPlatform() : installedPlatform;
 	}
-	//? } else {
-	public static ResourceLocation id(String path) {
-		return new ResourceLocation(AnvilLoreMod.MOD_ID, path);
-	}
-	//? }
 
 	public static void registerPayloads() {
-		PLATFORM.registerPayloads();
+		platform.registerPayloads();
 	}
 
 	public static void registerServerReceiver() {
-		PLATFORM.registerServerReceiver();
+		platform.registerServerReceiver();
 	}
 
 	public static boolean canSendState(ServerPlayer player, ClientboundAnvilLoreStatePayload payload) {
-		return PLATFORM.canSendState(player, payload);
+		return platform.canSendState(player, payload);
 	}
 
 	public static void sendState(ServerPlayer player, ClientboundAnvilLoreStatePayload payload) {
-		PLATFORM.sendState(player, payload);
+		platform.sendState(player, payload);
 	}
 
 	public static void handleClientLoreUpdate(ServerboundAnvilLoreUpdatePayload payload, ServerPlayer player) {
@@ -78,13 +62,4 @@ public final class AnvilLoreNetworking {
 		}
 	}
 
-	private static BetterLoreNetworkingPlatform loadPlatform() {
-		try {
-			ServiceLoader<BetterLoreNetworkingPlatform> loader = ServiceLoader.load(BetterLoreNetworkingPlatform.class);
-			Iterator<BetterLoreNetworkingPlatform> iterator = loader.iterator();
-			return iterator.hasNext() ? iterator.next() : new NoopBetterLoreNetworkingPlatform();
-		} catch (ServiceConfigurationError | LinkageError error) {
-			return new NoopBetterLoreNetworkingPlatform();
-		}
-	}
 }

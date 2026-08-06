@@ -7,12 +7,8 @@ import com.reign.betterlore.net.ServerboundAnvilNameUpdatePayload;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AnvilScreen;
 
-import java.util.Iterator;
-import java.util.ServiceConfigurationError;
-import java.util.ServiceLoader;
-
 public final class ClientAnvilLoreNetworking {
-	private static BetterLoreClientNetworkingPlatform platform = loadPlatform();
+	private static BetterLoreClientNetworkingPlatform platform = new NoopBetterLoreClientNetworkingPlatform();
 
 	private ClientAnvilLoreNetworking() {
 	}
@@ -24,10 +20,8 @@ public final class ClientAnvilLoreNetworking {
 	/**
 	 * Installs the loader's client transport during its client bootstrap.
 	 *
-	 * <p>Service loading remains a fallback for packaged environments, but
-	 * development launchers do not consistently expose their source-set service
-	 * descriptors to the game class loader. An explicit registration keeps the
-	 * editable anvil UI available in those environments as well.</p>
+	 * <p>The compatibility bootstrap installs exactly one implementation. This
+	 * avoids probing inactive version adapters through {@link java.util.ServiceLoader}.</p>
 	 */
 	public static void installPlatform(BetterLoreClientNetworkingPlatform installedPlatform) {
 		platform = installedPlatform == null ? new NoopBetterLoreClientNetworkingPlatform() : installedPlatform;
@@ -41,13 +35,9 @@ public final class ClientAnvilLoreNetworking {
 		return platform.canSendNameUpdate();
 	}
 
-	//? if >=1.20.6 {
-	//? if <1.21 {
 	public static boolean requiresStaticRecipeViewerPanelReservation() {
 		return platform.requiresStaticRecipeViewerPanelReservation();
 	}
-	//? }
-	//? }
 
 	public static void sendLoreUpdate(ServerboundAnvilLoreUpdatePayload payload) {
 		platform.sendLoreUpdate(payload);
@@ -71,13 +61,4 @@ public final class ClientAnvilLoreNetworking {
 		}
 	}
 
-	private static BetterLoreClientNetworkingPlatform loadPlatform() {
-		try {
-			ServiceLoader<BetterLoreClientNetworkingPlatform> loader = ServiceLoader.load(BetterLoreClientNetworkingPlatform.class);
-			Iterator<BetterLoreClientNetworkingPlatform> iterator = loader.iterator();
-			return iterator.hasNext() ? iterator.next() : new NoopBetterLoreClientNetworkingPlatform();
-		} catch (ServiceConfigurationError | LinkageError error) {
-			return new NoopBetterLoreClientNetworkingPlatform();
-		}
-	}
 }

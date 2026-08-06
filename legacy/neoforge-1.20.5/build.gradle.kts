@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "com.reign"
-version = "1.1.0"
+version = "1.2.0"
 base.archivesName.set("better-lore-neoforge-1.20.5")
 
 // NeoGradle's generated NeoForm task paths are long. Keeping these ephemeral
