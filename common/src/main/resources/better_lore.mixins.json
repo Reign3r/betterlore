@@ -6,8 +6,21 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "AnvilMenuMixin",
+    "ArmorStandItemTextMixin",
     "BlockItemMixin",
     "BlockDropMixin",
+    "BucketItemTextMixin",
+    "BucketableItemTextMixin",
+    "CopperGolemItemTextMixin",
+    "CopperGolemStatueItemTextMixin",
+    "DragonEggBlockMixin",
+    "EntityItemTextMixin",
+    "EntityTypeItemTextMixin",
+    "ItemUtilsBucketItemTextMixin",
+    "MilkBucketItemTextMixin",
+    "NameTagItemTextMixin",
+    "SolidBucketItemTextMixin",
+    "VehicleEntityItemTextMixin",
     "PistonMovingBlockEntityMixin"
   ],
   "client": [

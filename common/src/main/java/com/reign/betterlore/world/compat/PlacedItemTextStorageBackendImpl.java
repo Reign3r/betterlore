@@ -5,9 +5,11 @@ import com.reign.betterlore.lore.LoreMarkupDecompiler;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
 import com.reign.betterlore.net.AnvilLoreNetworking;
+import com.reign.betterlore.world.PlacedItemTextStorage;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 //? if >=1.21.5 {
+import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 //? } else {
@@ -17,13 +19,17 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 //? }
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 //? if >=26.1 {
 import net.minecraft.resources.Identifier;
 //? }
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.SavedData;
 //? if >=1.21.5 {
@@ -37,11 +43,18 @@ import java.util.List;
 public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextStorageBackend {
 	private static final String DATA_NAME = "better_lore_placed_item_text";
 	private static final String ENTRIES_KEY = "entries";
+	private static final String FOREIGN_LORE_COMPONENTS_KEY = "foreign_lore_components";
 
 	//? if >=1.21.5 {
-	private static final Codec<Storage> CODEC = SerializedEntry.CODEC.listOf().xmap(
-			Storage::new,
-			Storage::serializedEntries
+	private static final Codec<Either<List<Component>, String>> COMPATIBLE_FOREIGN_LORE_CODEC =
+			Codec.either(ComponentSerialization.CODEC.listOf(), Codec.STRING);
+	private static final Codec<List<SerializedEntry>> ENTRIES_CODEC = SerializedEntry.CODEC.listOf();
+	private static final Codec<Storage> CODEC = Codec.either(
+			ENTRIES_CODEC,
+			ENTRIES_CODEC.fieldOf(ENTRIES_KEY).codec()
+	).xmap(
+			serialized -> new Storage(serialized.map(left -> left, right -> right)),
+			storage -> Either.left(storage.serializedEntries())
 	);
 
 	//? if >=26.1 {
@@ -77,9 +90,10 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 		}
 
 		long packedPos = pos.asLong();
-		String rawLore = LoreMarkupDecompiler.toSafeLoreMarkup(placedStack);
+		String ownedLore = LoreMarkupDecompiler.toSafeOwnedLoreMarkup(placedStack);
+		List<Component> foreignLore = LoreComponents.foreignComponents(placedStack);
 		String rawName = LoreMarkupDecompiler.toSafeNameMarkup(placedStack);
-		if (rawLore.isEmpty() && rawName.isEmpty()) {
+		if (ownedLore.isEmpty() && foreignLore.isEmpty() && rawName.isEmpty()) {
 			Storage storage = getIfPresent(serverLevel);
 			if (storage != null && storage.entries.remove(packedPos) != null) {
 				storage.setDirty();
@@ -89,7 +103,7 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 
 		Storage storage = get(serverLevel);
 		String itemId = BuiltInRegistries.ITEM.getKey(placedStack.getItem()).toString();
-		ItemText replacement = new ItemText(itemId, rawLore, rawName);
+		ItemText replacement = new ItemText(itemId, "", ownedLore, foreignLore, rawName);
 		if (!replacement.equals(storage.entries.put(packedPos, replacement))) {
 			storage.setDirty();
 		}
@@ -125,28 +139,46 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 		}
 
 		String droppedItemId = BuiltInRegistries.ITEM.getKey(droppedStack.getItem()).toString();
-		if (!entry.itemId().equals(droppedItemId)) {
+		if (!PlacedItemTextStorage.matchesStoredItem(entry.itemId(), droppedItemId)) {
 			return;
 		}
 
-		applyLore(droppedStack, entry.rawLore());
-		applyName(droppedStack, entry.rawName());
+		ParseResult parsedName = LoreMarkupParser.parseName(entry.rawName());
+		String ownedLore = PlacedItemTextStorage.selectOwnedLore(
+				LoreMarkupDecompiler.toSafeOwnedLoreMarkup(droppedStack),
+				entry.ownedLore()
+		);
+		PlacedItemTextStorage.LoreRestorePlan lorePlan = PlacedItemTextStorage.planLoreRestore(
+				LoreComponents.foreignComponents(droppedStack),
+				entry.foreignLore(),
+				entry.legacyLore(),
+				ownedLore
+		);
+		if (!parsedName.isSuccess() || lorePlan == null) {
+			return;
+		}
+
+		setForeignLore(droppedStack, lorePlan.foreignLore());
+		applyOwnedLore(droppedStack, lorePlan.rawOwnedLore(), lorePlan.ownedDocument());
+		LoreComponents.applyNameTo(droppedStack, entry.rawName(), parsedName.document());
 		storage.entries.remove(packedPos);
 		storage.setDirty();
 	}
 
-	private static void applyLore(ItemStack stack, String rawLore) {
-		ParseResult parsed = LoreMarkupParser.parse(rawLore);
-		if (parsed.isSuccess()) {
-			LoreComponents.applyTo(stack, rawLore, parsed.document());
+	private static void setForeignLore(ItemStack stack, List<Component> lines) {
+		if (lines.isEmpty()) {
+			stack.remove(DataComponents.LORE);
+		} else {
+			stack.set(DataComponents.LORE, new ItemLore(lines));
 		}
 	}
 
-	private static void applyName(ItemStack stack, String rawName) {
-		ParseResult parsed = LoreMarkupParser.parseName(rawName);
-		if (parsed.isSuccess()) {
-			LoreComponents.applyNameTo(stack, rawName, parsed.document());
-		}
+	private static void applyOwnedLore(
+			ItemStack stack,
+			String rawLore,
+			com.reign.betterlore.lore.LoreDocument document
+	) {
+		LoreComponents.applyTo(stack, rawLore, document);
 	}
 
 	private static Storage get(ServerLevel level) {
@@ -201,6 +233,8 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 				ItemText itemText = new ItemText(
 						serialized.getString("item"),
 						serialized.getString("lore"),
+						serialized.getString("owned_lore"),
+						parseStoredComponents(serialized, registries),
 						serialized.getString("name")
 				);
 				if (!itemText.itemId().isEmpty()) {
@@ -218,8 +252,17 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 				CompoundTag serialized = new CompoundTag();
 				serialized.putLong("pos", entry.getLongKey());
 				serialized.putString("item", itemText.itemId());
-				if (!itemText.rawLore().isEmpty()) {
-					serialized.putString("lore", itemText.rawLore());
+				if (!itemText.legacyLore().isEmpty()) {
+					serialized.putString("lore", itemText.legacyLore());
+				}
+				if (!itemText.ownedLore().isEmpty()) {
+					serialized.putString("owned_lore", itemText.ownedLore());
+				}
+				if (!itemText.foreignLore().isEmpty()) {
+					serialized.put(
+							FOREIGN_LORE_COMPONENTS_KEY,
+							ComponentListNbtCodec.encode(itemText.foreignLore(), registries)
+					);
 				}
 				if (!itemText.rawName().isEmpty()) {
 					serialized.putString("name", itemText.rawName());
@@ -232,7 +275,42 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 		//? }
 	}
 
-	private record ItemText(String itemId, String rawLore, String rawName) {
+	//? if <1.21.5 {
+	private static List<Component> parseStoredComponents(
+			CompoundTag serialized,
+			HolderLookup.Provider registries
+	) {
+		Tag encoded = serialized.get(FOREIGN_LORE_COMPONENTS_KEY);
+		if (encoded != null) {
+			return ComponentListNbtCodec.decode(encoded, registries);
+		}
+		return parseStoredComponents(serialized.getString("foreign_lore"));
+	}
+	//? }
+
+	private static List<Component> parseStoredComponents(String rawLore) {
+		ParseResult parsed = LoreMarkupParser.parse(rawLore);
+		return parsed.isSuccess() ? LoreComponents.toComponents(parsed.document()) : List.of();
+	}
+
+	//? if >=1.21.5 {
+	private static List<Component> parseCompatibleForeignLore(
+			Either<List<Component>, String> serialized
+	) {
+		return serialized.map(List::copyOf, PlacedItemTextStorageBackendImpl::parseStoredComponents);
+	}
+	//? }
+
+	private record ItemText(
+			String itemId,
+			String legacyLore,
+			String ownedLore,
+			List<Component> foreignLore,
+			String rawName
+	) {
+		private ItemText {
+			foreignLore = List.copyOf(foreignLore);
+		}
 	}
 
 	private record SerializedEntry(long packedPos, ItemText itemText) {
@@ -240,10 +318,31 @@ public final class PlacedItemTextStorageBackendImpl implements PlacedItemTextSto
 		private static final Codec<SerializedEntry> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 				Codec.LONG.fieldOf("pos").forGetter(SerializedEntry::packedPos),
 				Codec.STRING.fieldOf("item").forGetter(entry -> entry.itemText().itemId()),
-				Codec.STRING.optionalFieldOf("lore", "").forGetter(entry -> entry.itemText().rawLore()),
+				Codec.STRING.optionalFieldOf("lore", "").forGetter(entry -> entry.itemText().legacyLore()),
+				Codec.STRING.optionalFieldOf("owned_lore", "").forGetter(entry -> entry.itemText().ownedLore()),
+				COMPATIBLE_FOREIGN_LORE_CODEC.optionalFieldOf(
+						"foreign_lore",
+						Either.left(List.of())
+				).forGetter(entry -> Either.left(entry.itemText().foreignLore())),
+				ComponentSerialization.CODEC.listOf().optionalFieldOf(
+						FOREIGN_LORE_COMPONENTS_KEY,
+						List.of()
+				).forGetter(entry -> List.of()),
 				Codec.STRING.optionalFieldOf("name", "").forGetter(entry -> entry.itemText().rawName())
-		).apply(instance, (packedPos, itemId, rawLore, rawName) ->
-				new SerializedEntry(packedPos, new ItemText(itemId, rawLore, rawName))));
+		).apply(instance, (packedPos, itemId, legacyLore, ownedLore, foreignLore, foreignLoreAlias, rawName) ->
+				new SerializedEntry(
+						packedPos,
+						new ItemText(
+								itemId,
+								legacyLore,
+								ownedLore,
+								PlacedItemTextStorage.mergeForeignLines(
+										parseCompatibleForeignLore(foreignLore),
+										foreignLoreAlias
+								),
+								rawName
+						)
+				)));
 		//? }
 	}
 }

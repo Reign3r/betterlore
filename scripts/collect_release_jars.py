@@ -220,6 +220,11 @@ _FORBIDDEN_RUNTIME_ASSETS = frozenset(
 )
 _MANIFEST = "META-INF/MANIFEST.MF"
 _MOD_CLASS_PREFIX = "com/reign/betterlore/"
+_SERVER_API_CLASS_PREFIX = "com/reign/betterlore/api/server/"
+_GENERATED_CLASS_PREFIXES = (
+    "com/reign/betterlore/compat/generated/",
+    "com/reign/betterlore/mixin/generated/",
+)
 _JEI_PLUGIN_PREFIX = "com/reign/betterlore/compat/jei/BetterLoreJeiPlugin"
 _NETWORK_SERVICE_NAMES = frozenset(
     {
@@ -594,6 +599,35 @@ def _variant_class_paths(
 ) -> set[str]:
     special = set(_SHARED_COMPATIBILITY_CLASSES)
     all_paths = set().union(*(set(classes) for _, _, classes in archives))
+    protected_special = sorted(
+        path for path in special if path.startswith(_SERVER_API_CLASS_PREFIX)
+    )
+    if protected_special:
+        raise CollectionError(
+            f"{loader}: public server API class(es) must not use the shared-class "
+            "escape hatch: "
+            + ", ".join(protected_special)
+        )
+
+    differing_server_api = sorted(
+        path
+        for path in all_paths
+        if path.startswith(_SERVER_API_CLASS_PREFIX)
+        and len(
+            {
+                hashlib.sha256(classes[path]).hexdigest() if path in classes else None
+                for _, _, classes in archives
+            }
+        )
+        > 1
+    )
+    if differing_server_api:
+        raise CollectionError(
+            f"{loader}: public server API class(es) differ or are missing between "
+            "retained binary families: "
+            + ", ".join(differing_server_api)
+        )
+
     plugin_paths = {path for path in all_paths if path.startswith(_JEI_PLUGIN_PREFIX)}
     candidates = all_paths - special - plugin_paths
     variants = {
@@ -639,7 +673,29 @@ def _variant_class_paths(
         if nestmates:
             variants.update(nestmates)
             changed = True
+
+    variant_server_api = sorted(
+        path for path in variants if path.startswith(_SERVER_API_CLASS_PREFIX)
+    )
+    if variant_server_api:
+        raise CollectionError(
+            f"{loader}: public server API class(es) vary between retained binary "
+            "families and would be relocated: "
+            + ", ".join(variant_server_api)
+        )
     return variants
+
+
+def _generated_server_api_paths(paths: set[str]) -> list[str]:
+    """Return public server API classes hidden below a generated adapter tree."""
+
+    return sorted(
+        path
+        for path in paths
+        if path.endswith(".class")
+        and path.startswith(_GENERATED_CLASS_PREFIXES)
+        and "/api/server/" in path
+    )
 
 
 def _mixin_configuration(
@@ -1053,6 +1109,14 @@ def _build_flat_adapter(
 ) -> None:
     archives = _family_archives(artifact, selected)
     variant_paths = _variant_class_paths(archives, artifact.loader)
+    source_paths = set().union(*(set(classes) for _, _, classes in archives))
+    generated_source_api = _generated_server_api_paths(source_paths)
+    if generated_source_api:
+        raise CollectionError(
+            f"{artifact.loader} {artifact.label}: public server API class(es) already "
+            "exist under a generated adapter path: "
+            + ", ".join(generated_source_api)
+        )
     first_source = archives[0][1]
     descriptor_name = (
         "META-INF/mods.toml"
@@ -1144,6 +1208,14 @@ def _build_flat_adapter(
                 f"{artifact.loader} {artifact.label}: duplicate universal JEI class {path}"
             )
         output_entries[path] = data
+
+    generated_output_api = _generated_server_api_paths(set(output_entries))
+    if generated_output_api:
+        raise CollectionError(
+            f"{artifact.loader} {artifact.label}: public server API class(es) were "
+            "relocated into a generated adapter path: "
+            + ", ".join(generated_output_api)
+        )
 
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(output_entries):
@@ -1366,7 +1438,104 @@ def collect_release_jars(root: Path = ROOT, destination: Path | None = None) -> 
     return records
 
 
+def _synthetic_reference_class(*references: str, marker: bytes = b"") -> bytes:
+    """Build the constant-pool subset used by the collector's relocation scan."""
+
+    constants: list[bytes] = []
+    for reference in references:
+        encoded = reference.encode("utf-8")
+        constants.append(b"\x01" + len(encoded).to_bytes(2, "big") + encoded)
+        constants.append(b"\x07" + (len(constants)).to_bytes(2, "big"))
+    return (
+        b"\xca\xfe\xba\xbe\x00\x00\x00\x41"
+        + (len(constants) + 1).to_bytes(2, "big")
+        + b"".join(constants)
+        + marker
+    )
+
+
+def _run_self_test() -> int:
+    public_api = _SERVER_API_CLASS_PREFIX + "SyntheticApi.class"
+    implementation = _MOD_CLASS_PREFIX + "internal/SyntheticImplementation"
+    implementation_class = implementation + ".class"
+    stable_api = _synthetic_reference_class()
+    stable_archives = [
+        (("one",), Path("one.jar"), {public_api: stable_api}),
+        (("two",), Path("two.jar"), {public_api: stable_api}),
+    ]
+    if _variant_class_paths(stable_archives, "forge"):
+        print("SELF-TEST ERROR: stable public API was classified as variant", file=sys.stderr)
+        return 1
+
+    differing_archives = [
+        (
+            ("one",),
+            Path("one.jar"),
+            {public_api: _synthetic_reference_class(marker=b"one")},
+        ),
+        (
+            ("two",),
+            Path("two.jar"),
+            {public_api: _synthetic_reference_class(marker=b"two")},
+        ),
+    ]
+    try:
+        _variant_class_paths(differing_archives, "forge")
+    except CollectionError:
+        pass
+    else:
+        print("SELF-TEST ERROR: varying public API was not rejected", file=sys.stderr)
+        return 1
+
+    transitive_archives = [
+        (
+            ("one",),
+            Path("one.jar"),
+            {
+                public_api: _synthetic_reference_class(implementation),
+                implementation_class: _synthetic_reference_class(marker=b"one"),
+            },
+        ),
+        (
+            ("two",),
+            Path("two.jar"),
+            {
+                public_api: _synthetic_reference_class(implementation),
+                implementation_class: _synthetic_reference_class(marker=b"two"),
+            },
+        ),
+    ]
+    try:
+        transitive_variants = _variant_class_paths(transitive_archives, "neoforge")
+    except CollectionError:
+        pass
+    else:
+        print(
+            "SELF-TEST ERROR: public API depending on a variant class was not rejected; "
+            f"variants={sorted(transitive_variants)!r}, "
+            f"references={sorted(_class_references(transitive_archives[0][2][public_api]))!r}",
+            file=sys.stderr,
+        )
+        return 1
+
+    relocated = {
+        "com/reign/betterlore/compat/generated/forge/mc_test/api/server/Api.class",
+        "com/reign/betterlore/mixin/generated/forge/mc_test/api/server/MixinApi.class",
+    }
+    if _generated_server_api_paths(relocated) != sorted(relocated):
+        print("SELF-TEST ERROR: generated public API path was not detected", file=sys.stderr)
+        return 1
+
+    print("Synthetic release-jar collector checks passed.")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:] == ["--self-test"]:
+        return _run_self_test()
+    if sys.argv[1:]:
+        print(f"ERROR: unsupported argument(s): {' '.join(sys.argv[1:])}", file=sys.stderr)
+        return 2
     try:
         records = collect_release_jars()
     except CollectionError as error:

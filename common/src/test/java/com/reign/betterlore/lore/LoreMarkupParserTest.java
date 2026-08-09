@@ -143,6 +143,15 @@ class LoreMarkupParserTest {
 	}
 
 	@Test
+	void acceptsTheFullServerEditorFormattingBudget() {
+		ParseResult result = LoreMarkupParser.parse(
+				"<b></b>".repeat(LoreMarkupParser.MAX_COLOR_TAGS / 2)
+		);
+
+		assertTrue(result.isSuccess());
+	}
+
+	@Test
 	void rejectsTooManyVisibleSymbols() {
 		ParseResult result = LoreMarkupParser.parse("a".repeat(LoreMarkupParser.MAX_VISIBLE_CODEPOINTS + 1));
 

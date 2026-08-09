@@ -16,6 +16,26 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Get-GradleProperty([string]$Path, [string]$Name) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Gradle properties file is missing: $Path"
+    }
+    $pattern = "^\s*$([regex]::Escape($Name))\s*=\s*(.*?)\s*$"
+    $values = @(foreach ($line in Get-Content -LiteralPath $Path) {
+        $match = [regex]::Match($line, $pattern)
+        if ($match.Success) {
+            $match.Groups[1].Value
+        }
+    })
+    if ($values.Count -ne 1 -or [string]::IsNullOrWhiteSpace([string]$values[0])) {
+        throw "$Path must define $Name exactly once."
+    }
+    return [string]$values[0]
+}
+
+$modVersion = Get-GradleProperty (Join-Path $PSScriptRoot '..\gradle.properties') 'mod.version'
+$escapedModVersion = [regex]::Escape($modVersion)
 $versionOrder = @(
     '1.20.5', '1.20.6', '1.21', '1.21.1', '1.21.2', '1.21.3',
     '1.21.4', '1.21.5', '1.21.6', '1.21.7', '1.21.8', '1.21.9',
@@ -469,14 +489,14 @@ foreach ($target in $targets) {
                 if ($target.loader -eq 'fabric') {
                     $candidateLabel = [IO.Path]::GetFileNameWithoutExtension($target.nested_candidate).Replace('better-lore-impl-', '')
                     $modReady = $latestFresh -and
-                        $latestContent -match '(?m)^\s*-\s+better_lore\s+1\.2\.0\s*$' -and
-                        $latestContent -match [regex]::Escape("better_lore_impl 1.2.0+mc.$candidateLabel")
+                        $latestContent -match "(?m)^\s*-\s+better_lore\s+$escapedModVersion\s*$" -and
+                        $latestContent -match [regex]::Escape("better_lore_impl $modVersion+mc.$candidateLabel")
                 } else {
                     $fmlDiscoveryContent = "$latestContent`n$debugContent"
                     $modReady = ($latestFresh -or $debugFresh) -and
                         $fmlDiscoveryContent -match [regex]::Escape([string]$target.file) -and
                         ($fmlDiscoveryContent -match 'Found valid mod file[^\r\n]*\{better_lore\} mods' -or
-                            $fmlDiscoveryContent -match '(?m)^\s*Better Lore 1\.2\.0 \(better_lore\)\s*$')
+                            $fmlDiscoveryContent -match "(?m)^\s*Better Lore $escapedModVersion \(better_lore\)\s*$")
                 }
 
                 if ($observedIds.Count -gt 0 -and $modReady -and $latestFresh -and $latestContent -match 'Sound engine started') {
@@ -509,7 +529,7 @@ foreach ($target in $targets) {
                             [void]$evidence.Add('Fabric discovered the public better_lore container')
                             [void]$evidence.Add("Fabric selected $($target.nested_candidate)")
                         } else {
-                            [void]$evidence.Add("$displayLoader found $($target.file) as valid better_lore mod 1.2.0")
+                            [void]$evidence.Add("$displayLoader found $($target.file) as valid better_lore mod $modVersion")
                         }
                         [void]$evidence.Add('A Java process was correlated to the target instance')
                         [void]$evidence.Add("Java maximum heap is $ExpectedMaxMemoryMb MB")

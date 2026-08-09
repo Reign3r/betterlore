@@ -62,6 +62,196 @@ _JEI_COMPATIBILITY_MIXIN_CLASS_PATH = (
 )
 _BETTER_LORE_INTERNAL_PREFIX = "com/reign/betterlore/"
 _JAVA_21_CLASSFILE_MAJOR = 65
+_SERVER_API_CLASS_PREFIX = "com/reign/betterlore/api/server/"
+_SERVER_API_GENERATED_PREFIXES = (
+    "com/reign/betterlore/compat/generated/",
+    "com/reign/betterlore/mixin/generated/",
+)
+_SERVER_API_CLASS = _SERVER_API_CLASS_PREFIX + "BetterLoreServerApi.class"
+_SERVER_API_FACADE_CLASS = _SERVER_API_CLASS_PREFIX + "BetterLoreServerApis.class"
+_SERVER_API_HOLDER_CLASS = _SERVER_API_CLASS_PREFIX + "BetterLoreServerApis$Holder.class"
+_SERVER_API_IMPLEMENTATION_CLASS = (
+    "com/reign/betterlore/internal/serverapi/BetterLoreServerApiImpl.class"
+)
+_SERVER_API_VALIDATOR_CLASS = (
+    "com/reign/betterlore/internal/serverapi/AnvilEditorDraftValidator.class"
+)
+_SERVER_API_IMPLEMENTATION_INTERNAL_NAME = _SERVER_API_IMPLEMENTATION_CLASS[:-6]
+_SERVER_API_VALIDATOR_INTERNAL_NAME = _SERVER_API_VALIDATOR_CLASS[:-6]
+_SERVER_API_SUBMISSION_INTERNAL_NAME = (
+    "com/reign/betterlore/internal/serverapi/AnvilEditorDraftSubmission"
+)
+_SERVER_API_DRAFT_APPLIER_SUFFIX = "AnvilEditorDraftSubmission$DraftApplier"
+_ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME = (
+    "com/reign/betterlore/access/AnvilLoreMenuBridge"
+)
+_SERVER_DRAFT_APPLY_DESCRIPTOR = "(IZLjava/lang/String;ZLjava/lang/String;)Z"
+_SERVER_API_VALIDATOR_METHOD = (
+    "validate",
+    "(Lcom/reign/betterlore/api/server/AnvilEditorDraft;)"
+    "Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation;",
+)
+_SERVER_API_REQUIRED_CLASSES = frozenset(
+    {
+        _SERVER_API_CLASS,
+        _SERVER_API_FACADE_CLASS,
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraft.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation$Status.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult$Status.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorSession.class",
+    }
+)
+_SERVER_API_REQUIRED_METHODS: Mapping[str, frozenset[tuple[str, str]]] = {
+    _SERVER_API_CLASS: frozenset(
+        {
+            ("apiVersion", "()I"),
+            (
+                "validateDraft",
+                "(Lcom/reign/betterlore/api/server/AnvilEditorDraft;)"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation;",
+            ),
+        }
+    ),
+    _SERVER_API_FACADE_CLASS: frozenset(
+        {
+            (
+                "get",
+                "()Lcom/reign/betterlore/api/server/BetterLoreServerApi;",
+            ),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraft.class": frozenset(
+        {
+            ("<init>", "(IIZLjava/lang/String;ZLjava/lang/String;)V"),
+            ("containerId", "()I"),
+            ("sessionId", "()I"),
+            ("nameEdited", "()Z"),
+            ("rawNameMarkup", "()Ljava/lang/String;"),
+            ("loreEdited", "()Z"),
+            ("rawLoreMarkup", "()Ljava/lang/String;"),
+            ("hasChanges", "()Z"),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation.class": frozenset(
+        {
+            (
+                "<init>",
+                "(Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation$Status;"
+                "Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;"
+                "Ljava/lang/String;)V",
+            ),
+            (
+                "status",
+                "()Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation$Status;",
+            ),
+            ("nameErrorMessage", "()Ljava/lang/String;"),
+            ("loreErrorMessage", "()Ljava/lang/String;"),
+            ("normalizedNameMarkup", "()Ljava/lang/String;"),
+            ("normalizedLoreMarkup", "()Ljava/lang/String;"),
+            ("valid", "()Z"),
+            ("message", "()Ljava/lang/String;"),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation$Status.class": frozenset(
+        {
+            (
+                "values",
+                "()[Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation$Status;",
+            ),
+            (
+                "valueOf",
+                "(Ljava/lang/String;)"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation$Status;",
+            ),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult.class": frozenset(
+        {
+            (
+                "<init>",
+                "(Lcom/reign/betterlore/api/server/AnvilEditorDraftResult$Status;"
+                "Ljava/lang/String;)V",
+            ),
+            (
+                "status",
+                "()Lcom/reign/betterlore/api/server/AnvilEditorDraftResult$Status;",
+            ),
+            ("message", "()Ljava/lang/String;"),
+            ("applied", "()Z"),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult$Status.class": frozenset(
+        {
+            (
+                "values",
+                "()[Lcom/reign/betterlore/api/server/AnvilEditorDraftResult$Status;",
+            ),
+            (
+                "valueOf",
+                "(Ljava/lang/String;)"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftResult$Status;",
+            ),
+        }
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorSession.class": frozenset(
+        {
+            ("<init>", "(IILjava/lang/String;Ljava/lang/String;I)V"),
+            ("containerId", "()I"),
+            ("sessionId", "()I"),
+            ("rawNameMarkup", "()Ljava/lang/String;"),
+            ("rawLoreMarkup", "()Ljava/lang/String;"),
+            ("loreEditLevelCost", "()I"),
+        }
+    ),
+}
+_SERVER_API_PLAYER_METHODS = (
+    ("hasNativeEditor", "", "Z"),
+    ("currentAnvilSession", "", "Ljava/util/Optional;"),
+    (
+        "submitDraft",
+        "Lcom/reign/betterlore/api/server/AnvilEditorDraft;",
+        "Lcom/reign/betterlore/api/server/AnvilEditorDraftResult;",
+    ),
+)
+_SERVER_API_RECORD_CLASSES = frozenset(
+    {
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraft.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult.class",
+        _SERVER_API_CLASS_PREFIX + "AnvilEditorSession.class",
+    }
+)
+_SERVER_API_ENUM_CONSTANTS: Mapping[str, tuple[str, ...]] = {
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftValidation$Status.class": (
+        "VALID",
+        "MISSING_DRAFT",
+        "NO_CHANGES",
+        "INVALID_NAME",
+        "INVALID_LORE",
+        "INVALID_NAME_AND_LORE",
+    ),
+    _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult$Status.class": (
+        "APPLIED",
+        "NO_CHANGES",
+        "INVALID_DRAFT",
+        "NO_ACTIVE_ANVIL",
+        "WRONG_CONTAINER",
+        "STALE_SESSION",
+        "EMPTY_INPUT",
+    ),
+}
+
+_ACC_PUBLIC = 0x0001
+_ACC_PRIVATE = 0x0002
+_ACC_PROTECTED = 0x0004
+_ACC_STATIC = 0x0008
+_ACC_FINAL = 0x0010
+_ACC_INTERFACE = 0x0200
+_ACC_ABSTRACT = 0x0400
+_ACC_ANNOTATION = 0x2000
+_ACC_ENUM = 0x4000
 _MIXIN_PLUGIN_CLASS = "com.reign.betterlore.compat.BetterLoreMixinPlugin"
 _MIXIN_PLUGIN_CLASS_PATH = _MIXIN_PLUGIN_CLASS.replace(".", "/") + ".class"
 _COMPATIBILITY_RUNTIME_CLASSES = frozenset(
@@ -814,6 +1004,18 @@ def _validate_fabric_bundle(
             forbidden = sorted(names & _FORBIDDEN_RUNTIME_ASSETS)
             if forbidden:
                 errors.append(f"{label}: contains non-runtime artwork: {', '.join(forbidden)}")
+            carrier_server_api = sorted(
+                name
+                for name in names
+                if name.startswith(_SERVER_API_CLASS_PREFIX) and name.endswith(".class")
+            )
+            carrier_server_api.extend(_generated_server_api_paths(names))
+            if carrier_server_api:
+                errors.append(
+                    f"{label}: public carrier must remain code-free; server API classes "
+                    "belong in the version-selected nested implementation(s): "
+                    + ", ".join(sorted(set(carrier_server_api)))
+                )
             descriptor_text = _read_archive_text(archive, "fabric.mod.json", errors, label)
             if descriptor_text is None:
                 return errors
@@ -870,6 +1072,24 @@ def _validate_fabric_bundle(
                 try:
                     with zipfile.ZipFile(BytesIO(data)) as nested:
                         nested_names = set(nested.namelist())
+                        server_player_internal_name = (
+                            "net/minecraft/server/level/ServerPlayer"
+                            if family[0].startswith("26.")
+                            else "net/minecraft/class_3222"
+                        )
+                        _validate_server_api_contract(
+                            nested,
+                            nested_names,
+                            errors,
+                            f"{label}: {nested_path}",
+                            server_player_internal_name,
+                        )
+                        _validate_server_api_runtime_support(
+                            nested,
+                            nested_names,
+                            errors,
+                            f"{label}: {nested_path}",
+                        )
                         _validate_adapter_classfiles(
                             nested,
                             nested_names,
@@ -989,17 +1209,46 @@ def _flat_adapter_families(
     return tuple(families)
 
 
-def _classfile_layout(
-    data: bytes,
-) -> tuple[int, list[str | None], list[int], int]:
-    """Return classfile major, UTF-8 constants, class-name indexes, and pool end."""
+@dataclass
+class _ClassfilePool:
+    major: int
+    utf8: list[str | None]
+    class_name_indexes: dict[int, int]
+    integer_constants: dict[int, int]
+    name_and_types: dict[int, tuple[int, int]]
+    method_references: dict[int, tuple[int, int]]
+    end: int
 
+
+@dataclass(frozen=True)
+class _ClassfileField:
+    access_flags: int
+    constant_value: object | None
+
+
+@dataclass
+class _ClassfileDeclaration:
+    major: int
+    access_flags: int
+    this_class: str
+    interfaces: tuple[str, ...]
+    fields: dict[tuple[str, str], _ClassfileField]
+    methods: dict[tuple[str, str], int]
+    method_signatures: dict[tuple[str, str], str]
+    attributes: frozenset[str]
+    inner_class_access: dict[str, int]
+
+
+def _classfile_pool(data: bytes) -> _ClassfilePool:
     if len(data) < 10 or data[:4] != b"\xca\xfe\xba\xbe":
         raise ValueError("invalid Java classfile header")
     major = int.from_bytes(data[6:8], "big")
     constant_count = int.from_bytes(data[8:10], "big")
     utf8: list[str | None] = [None] * constant_count
-    class_name_indexes: list[int] = []
+    class_name_indexes: dict[int, int] = {}
+    integer_constants: dict[int, int] = {}
+    name_and_types: dict[int, tuple[int, int]] = {}
+    method_references: dict[int, tuple[int, int]] = {}
     fixed_sizes = {
         3: 4,
         4: 4,
@@ -1040,28 +1289,217 @@ def _classfile_layout(
                 raise ValueError(f"unsupported Java constant-pool tag {tag}")
             if offset + size > len(data):
                 raise ValueError("truncated Java constant-pool entry")
-            if tag == 7:
-                class_name_indexes.append(
-                    int.from_bytes(data[offset : offset + 2], "big")
+            if tag == 3:
+                integer_constants[index] = int.from_bytes(
+                    data[offset : offset + 4], "big", signed=True
+                )
+            elif tag == 7:
+                class_name_indexes[index] = int.from_bytes(
+                    data[offset : offset + 2], "big"
+                )
+            elif tag in (10, 11):
+                method_references[index] = (
+                    int.from_bytes(data[offset : offset + 2], "big"),
+                    int.from_bytes(data[offset + 2 : offset + 4], "big"),
+                )
+            elif tag == 12:
+                name_and_types[index] = (
+                    int.from_bytes(data[offset : offset + 2], "big"),
+                    int.from_bytes(data[offset + 2 : offset + 4], "big"),
                 )
             offset += size
             if tag in (5, 6):
                 index += 1
         index += 1
-    return major, utf8, class_name_indexes, offset
+    return _ClassfilePool(
+        major,
+        utf8,
+        class_name_indexes,
+        integer_constants,
+        name_and_types,
+        method_references,
+        offset,
+    )
+
+
+def _pool_utf8(pool: _ClassfilePool, index: int, context: str) -> str:
+    if not 0 < index < len(pool.utf8) or pool.utf8[index] is None:
+        raise ValueError(f"invalid Java {context} UTF-8 index")
+    return pool.utf8[index]  # type: ignore[return-value]
+
+
+def _pool_class_name(pool: _ClassfilePool, index: int, context: str) -> str:
+    name_index = pool.class_name_indexes.get(index)
+    if name_index is None:
+        raise ValueError(f"invalid Java {context} class index")
+    return _pool_utf8(pool, name_index, context)
+
+
+def _classfile_layout(
+    data: bytes,
+) -> tuple[int, list[str | None], list[int], int]:
+    """Return classfile major, UTF-8 constants, class-name indexes, and pool end."""
+
+    pool = _classfile_pool(data)
+    return pool.major, pool.utf8, list(pool.class_name_indexes.values()), pool.end
+
+
+def _read_classfile_attributes(
+    data: bytes,
+    offset: int,
+    count: int,
+    pool: _ClassfilePool,
+) -> tuple[list[tuple[str, bytes]], int]:
+    attributes: list[tuple[str, bytes]] = []
+    for _ in range(count):
+        if offset + 6 > len(data):
+            raise ValueError("truncated Java class attribute")
+        name = _pool_utf8(
+            pool,
+            int.from_bytes(data[offset : offset + 2], "big"),
+            "attribute name",
+        )
+        length = int.from_bytes(data[offset + 2 : offset + 6], "big")
+        offset += 6
+        end = offset + length
+        if end > len(data):
+            raise ValueError("truncated Java class attribute payload")
+        attributes.append((name, data[offset:end]))
+        offset = end
+    return attributes, offset
+
+
+def _classfile_declaration(data: bytes) -> _ClassfileDeclaration:
+    pool = _classfile_pool(data)
+    offset = pool.end
+    if offset + 8 > len(data):
+        raise ValueError("truncated Java class declaration")
+    access_flags = int.from_bytes(data[offset : offset + 2], "big")
+    this_class = _pool_class_name(
+        pool, int.from_bytes(data[offset + 2 : offset + 4], "big"), "this"
+    )
+    offset += 6  # access flags, this class, super class
+    interface_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    if offset + interface_count * 2 > len(data):
+        raise ValueError("truncated Java interface table")
+    interfaces = tuple(
+        _pool_class_name(
+            pool,
+            int.from_bytes(data[offset + index * 2 : offset + index * 2 + 2], "big"),
+            "interface",
+        )
+        for index in range(interface_count)
+    )
+    offset += interface_count * 2
+
+    if offset + 2 > len(data):
+        raise ValueError("truncated Java field table")
+    field_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    fields: dict[tuple[str, str], _ClassfileField] = {}
+    for _ in range(field_count):
+        if offset + 8 > len(data):
+            raise ValueError("truncated Java field")
+        member_access = int.from_bytes(data[offset : offset + 2], "big")
+        name = _pool_utf8(
+            pool, int.from_bytes(data[offset + 2 : offset + 4], "big"), "field name"
+        )
+        descriptor = _pool_utf8(
+            pool,
+            int.from_bytes(data[offset + 4 : offset + 6], "big"),
+            "field descriptor",
+        )
+        attribute_count = int.from_bytes(data[offset + 6 : offset + 8], "big")
+        member_attributes, offset = _read_classfile_attributes(
+            data, offset + 8, attribute_count, pool
+        )
+        constant_value: object | None = None
+        for attribute_name, payload in member_attributes:
+            if attribute_name == "ConstantValue":
+                if len(payload) != 2:
+                    raise ValueError("invalid Java ConstantValue attribute")
+                constant_value = pool.integer_constants.get(
+                    int.from_bytes(payload, "big")
+                )
+        fields[(name, descriptor)] = _ClassfileField(member_access, constant_value)
+
+    if offset + 2 > len(data):
+        raise ValueError("truncated Java method table")
+    method_count = int.from_bytes(data[offset : offset + 2], "big")
+    offset += 2
+    methods: dict[tuple[str, str], int] = {}
+    method_signatures: dict[tuple[str, str], str] = {}
+    for _ in range(method_count):
+        if offset + 8 > len(data):
+            raise ValueError("truncated Java method")
+        member_access = int.from_bytes(data[offset : offset + 2], "big")
+        name = _pool_utf8(
+            pool, int.from_bytes(data[offset + 2 : offset + 4], "big"), "method name"
+        )
+        descriptor = _pool_utf8(
+            pool,
+            int.from_bytes(data[offset + 4 : offset + 6], "big"),
+            "method descriptor",
+        )
+        attribute_count = int.from_bytes(data[offset + 6 : offset + 8], "big")
+        member_attributes, offset = _read_classfile_attributes(
+            data, offset + 8, attribute_count, pool
+        )
+        methods[(name, descriptor)] = member_access
+        for attribute_name, payload in member_attributes:
+            if attribute_name == "Signature":
+                if len(payload) != 2:
+                    raise ValueError("invalid Java method Signature attribute")
+                method_signatures[(name, descriptor)] = _pool_utf8(
+                    pool, int.from_bytes(payload, "big"), "method signature"
+                )
+
+    if offset + 2 > len(data):
+        raise ValueError("truncated Java class attribute table")
+    attribute_count = int.from_bytes(data[offset : offset + 2], "big")
+    class_attributes, offset = _read_classfile_attributes(
+        data, offset + 2, attribute_count, pool
+    )
+    if offset != len(data):
+        raise ValueError("unexpected data after Java class attributes")
+    inner_class_access: dict[str, int] = {}
+    for attribute_name, payload in class_attributes:
+        if attribute_name != "InnerClasses":
+            continue
+        if len(payload) < 2:
+            raise ValueError("truncated Java InnerClasses attribute")
+        count = int.from_bytes(payload[:2], "big")
+        if len(payload) != 2 + count * 8:
+            raise ValueError("invalid Java InnerClasses attribute")
+        for index in range(count):
+            entry = payload[2 + index * 8 : 10 + index * 8]
+            inner_index = int.from_bytes(entry[:2], "big")
+            if inner_index:
+                inner_class_access[_pool_class_name(pool, inner_index, "inner")] = (
+                    int.from_bytes(entry[6:8], "big")
+                )
+    return _ClassfileDeclaration(
+        pool.major,
+        access_flags,
+        this_class,
+        interfaces,
+        fields,
+        methods,
+        method_signatures,
+        frozenset(name for name, _ in class_attributes),
+        inner_class_access,
+    )
 
 
 def _classfile_structural_references(data: bytes) -> set[str]:
     """Return classes referenced by constants, descriptors, and signatures."""
 
-    _, utf8, class_name_indexes, _ = _classfile_layout(data)
+    pool = _classfile_pool(data)
+    utf8 = pool.utf8
     references: set[str] = set()
-    for name_index in class_name_indexes:
-        if not 0 < name_index < len(utf8):
-            raise ValueError("invalid Java class-name index")
-        value = utf8[name_index]
-        if value is None:
-            raise ValueError("Java class name is not UTF-8")
+    for class_index in pool.class_name_indexes:
+        value = _pool_class_name(pool, class_index, "referenced")
         if value.startswith("["):
             references.update(re.findall(r"L([^;]+);", value))
         else:
@@ -1077,53 +1515,738 @@ def _classfile_structural_references(data: bytes) -> set[str]:
     return references
 
 
-def _skip_classfile_member(data: bytes, offset: int) -> int:
-    if offset + 8 > len(data):
-        raise ValueError("truncated Java class member")
-    attribute_count = int.from_bytes(data[offset + 6 : offset + 8], "big")
-    offset += 8
-    for _ in range(attribute_count):
-        if offset + 6 > len(data):
-            raise ValueError("truncated Java class attribute")
-        length = int.from_bytes(data[offset + 2 : offset + 6], "big")
-        offset += 6 + length
-        if offset > len(data):
-            raise ValueError("truncated Java class attribute payload")
-    return offset
+def _classfile_method_table(data: bytes) -> tuple[int, dict[tuple[str, str], int]]:
+    """Return classfile major and access flags keyed by method descriptor."""
+
+    declaration = _classfile_declaration(data)
+    return declaration.major, declaration.methods
 
 
 def _classfile_methods(data: bytes) -> tuple[int, set[tuple[str, str]]]:
-    major, utf8, _, offset = _classfile_layout(data)
-    if offset + 8 > len(data):
-        raise ValueError("truncated Java class declaration")
-    offset += 6  # access flags, this class, super class
-    interface_count = int.from_bytes(data[offset : offset + 2], "big")
-    offset += 2 + 2 * interface_count
-    if offset + 2 > len(data):
-        raise ValueError("truncated Java field table")
-    field_count = int.from_bytes(data[offset : offset + 2], "big")
-    offset += 2
-    for _ in range(field_count):
-        offset = _skip_classfile_member(data, offset)
-    if offset + 2 > len(data):
-        raise ValueError("truncated Java method table")
-    method_count = int.from_bytes(data[offset : offset + 2], "big")
-    offset += 2
-    methods: set[tuple[str, str]] = set()
-    for _ in range(method_count):
-        if offset + 8 > len(data):
-            raise ValueError("truncated Java method")
-        name_index = int.from_bytes(data[offset + 2 : offset + 4], "big")
-        descriptor_index = int.from_bytes(data[offset + 4 : offset + 6], "big")
-        if not (0 < name_index < len(utf8)) or not (0 < descriptor_index < len(utf8)):
-            raise ValueError("invalid Java method name or descriptor index")
-        name = utf8[name_index]
-        descriptor = utf8[descriptor_index]
-        if name is None or descriptor is None:
-            raise ValueError("Java method name or descriptor is not UTF-8")
-        methods.add((name, descriptor))
-        offset = _skip_classfile_member(data, offset)
-    return major, methods
+    major, methods = _classfile_method_table(data)
+    return major, set(methods)
+
+
+def _classfile_method_references(data: bytes) -> set[tuple[str, str, str]]:
+    pool = _classfile_pool(data)
+    references: set[tuple[str, str, str]] = set()
+    for class_index, name_and_type_index in pool.method_references.values():
+        name_and_type = pool.name_and_types.get(name_and_type_index)
+        if name_and_type is None:
+            raise ValueError("invalid Java method NameAndType index")
+        references.add(
+            (
+                _pool_class_name(pool, class_index, "method owner"),
+                _pool_utf8(pool, name_and_type[0], "method name"),
+                _pool_utf8(pool, name_and_type[1], "method descriptor"),
+            )
+        )
+    return references
+
+
+def _generated_server_api_paths(names: set[str]) -> list[str]:
+    return sorted(
+        name
+        for name in names
+        if name.endswith(".class")
+        and name.startswith(_SERVER_API_GENERATED_PREFIXES)
+        and "/api/server/" in name
+    )
+
+
+def _missing_access_flags(actual: int, required: int) -> int:
+    return required & ~actual
+
+
+def _unexpected_access_flags(actual: int, forbidden: int) -> int:
+    return actual & forbidden
+
+
+def _server_api_method_flag_contract(class_path: str) -> tuple[int, int]:
+    if class_path == _SERVER_API_CLASS:
+        return _ACC_PUBLIC | _ACC_ABSTRACT, _ACC_STATIC
+    if class_path == _SERVER_API_FACADE_CLASS:
+        return _ACC_PUBLIC | _ACC_STATIC, _ACC_ABSTRACT
+    if class_path in _SERVER_API_ENUM_CONSTANTS:
+        return _ACC_PUBLIC | _ACC_STATIC, _ACC_ABSTRACT
+    return _ACC_PUBLIC, _ACC_STATIC | _ACC_ABSTRACT
+
+
+def _validate_public_server_api_declaration(
+    class_path: str,
+    declaration: _ClassfileDeclaration,
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    expected_name = class_path[:-6]
+    if declaration.this_class != expected_name:
+        errors.append(
+            f"{archive_label}: public server API entry {class_path} declares "
+            f"{declaration.this_class}"
+        )
+
+    required = _ACC_PUBLIC
+    forbidden = _ACC_ANNOTATION
+    require_record_attribute = False
+    if class_path == _SERVER_API_CLASS:
+        required |= _ACC_INTERFACE | _ACC_ABSTRACT
+        forbidden |= _ACC_FINAL | _ACC_ENUM
+    elif class_path in _SERVER_API_RECORD_CLASSES:
+        required |= _ACC_FINAL
+        forbidden |= _ACC_INTERFACE | _ACC_ABSTRACT | _ACC_ENUM
+        require_record_attribute = True
+    elif class_path in _SERVER_API_ENUM_CONSTANTS:
+        required |= _ACC_FINAL | _ACC_ENUM
+        forbidden |= _ACC_INTERFACE | _ACC_ABSTRACT
+    else:
+        required |= _ACC_FINAL
+        forbidden |= _ACC_INTERFACE | _ACC_ABSTRACT | _ACC_ENUM
+
+    missing = _missing_access_flags(declaration.access_flags, required)
+    unexpected = _unexpected_access_flags(declaration.access_flags, forbidden)
+    if missing or unexpected:
+        errors.append(
+            f"{archive_label}: public server API class {class_path} has invalid "
+            f"class modifiers 0x{declaration.access_flags:04x} "
+            f"(missing 0x{missing:04x}, forbidden 0x{unexpected:04x})"
+        )
+    if require_record_attribute and "Record" not in declaration.attributes:
+        errors.append(
+            f"{archive_label}: public server API record {class_path} lacks its "
+            "Record class attribute"
+        )
+
+
+def _validate_server_api_contract(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+    server_player_internal_name: str,
+) -> None:
+    """Require the stable v1 server API without assuming one mapping namespace."""
+
+    generated_api = _generated_server_api_paths(names)
+    if generated_api:
+        errors.append(
+            f"{archive_label}: public server API class(es) must not be relocated "
+            "under compat/generated or mixin/generated: "
+            + ", ".join(generated_api)
+        )
+
+    missing_classes = sorted(_SERVER_API_REQUIRED_CLASSES - names)
+    if missing_classes:
+        errors.append(
+            f"{archive_label}: missing stable public server API class(es): "
+            + ", ".join(missing_classes)
+        )
+
+    required_methods = dict(_SERVER_API_REQUIRED_METHODS)
+    required_methods[_SERVER_API_CLASS] = frozenset(
+        {
+            *required_methods[_SERVER_API_CLASS],
+            *(
+                (
+                    method_name,
+                    f"(L{server_player_internal_name};{remaining_parameters})"
+                    f"{return_descriptor}",
+                )
+                for method_name, remaining_parameters, return_descriptor
+                in _SERVER_API_PLAYER_METHODS
+            ),
+        }
+    )
+
+    declarations: dict[str, _ClassfileDeclaration] = {}
+    for class_path in sorted(_SERVER_API_REQUIRED_CLASSES):
+        if class_path not in names:
+            continue
+        try:
+            declaration = _classfile_declaration(archive.read(class_path))
+        except (KeyError, ValueError) as error:
+            errors.append(
+                f"{archive_label}: cannot inspect public server API class "
+                f"{class_path} ({error})"
+            )
+            continue
+        declarations[class_path] = declaration
+        if declaration.major > _JAVA_21_CLASSFILE_MAJOR:
+            errors.append(
+                f"{archive_label}: public server API class {class_path} uses classfile "
+                f"major {declaration.major}, expected <= {_JAVA_21_CLASSFILE_MAJOR}"
+            )
+        _validate_public_server_api_declaration(
+            class_path, declaration, errors, archive_label
+        )
+
+    for class_path, expected_methods in required_methods.items():
+        declaration = declarations.get(class_path)
+        if declaration is None:
+            continue
+        missing_methods = sorted(expected_methods - set(declaration.methods))
+        if missing_methods:
+            rendered = ", ".join(
+                f"{name}{descriptor}" for name, descriptor in missing_methods
+            )
+            errors.append(
+                f"{archive_label}: public server API class {class_path} lacks "
+                f"required v1 method descriptor(s): {rendered}"
+            )
+        non_public = sorted(
+            (name, descriptor)
+            for name, descriptor in expected_methods
+            if (name, descriptor) in declaration.methods
+            and not declaration.methods[(name, descriptor)] & _ACC_PUBLIC
+        )
+        if non_public:
+            rendered = ", ".join(
+                f"{name}{descriptor}" for name, descriptor in non_public
+            )
+            errors.append(
+                f"{archive_label}: public server API method(s) are not public: {rendered}"
+            )
+        required_flags, forbidden_flags = _server_api_method_flag_contract(class_path)
+        wrong_flags = sorted(
+            (name, descriptor, flags)
+            for (name, descriptor), flags in declaration.methods.items()
+            if (name, descriptor) in expected_methods
+            and (
+                _missing_access_flags(flags, required_flags)
+                or _unexpected_access_flags(flags, forbidden_flags)
+            )
+        )
+        if wrong_flags:
+            rendered = ", ".join(
+                f"{name}{descriptor}=0x{flags:04x}"
+                for name, descriptor, flags in wrong_flags
+            )
+            errors.append(
+                f"{archive_label}: public server API method(s) have invalid "
+                f"static/instance modifiers: {rendered}"
+            )
+
+    api_declaration = declarations.get(_SERVER_API_CLASS)
+    if api_declaration is not None:
+        session_descriptor = (
+            f"(L{server_player_internal_name};)Ljava/util/Optional;"
+        )
+        session_method = ("currentAnvilSession", session_descriptor)
+        expected_signature = (
+            f"(L{server_player_internal_name};)"
+            "Ljava/util/Optional<"
+            "Lcom/reign/betterlore/api/server/AnvilEditorSession;>;"
+        )
+        actual_signature = api_declaration.method_signatures.get(session_method)
+        if actual_signature != expected_signature:
+            errors.append(
+                f"{archive_label}: currentAnvilSession generic Signature is "
+                f"{actual_signature!r}, expected {expected_signature!r}"
+            )
+
+    if api_declaration is not None:
+        api_version = api_declaration.fields.get(("API_VERSION", "I"))
+        required_field_flags = _ACC_PUBLIC | _ACC_STATIC | _ACC_FINAL
+        if api_version is None:
+            errors.append(
+                f"{archive_label}: {_SERVER_API_CLASS} lacks public API_VERSION:I"
+            )
+        else:
+            missing = _missing_access_flags(
+                api_version.access_flags, required_field_flags
+            )
+            forbidden = _unexpected_access_flags(
+                api_version.access_flags, _ACC_PRIVATE | _ACC_PROTECTED
+            )
+            if missing or forbidden:
+                errors.append(
+                    f"{archive_label}: API_VERSION must be public static final "
+                    f"(flags 0x{api_version.access_flags:04x})"
+                )
+            if api_version.constant_value != 1:
+                errors.append(
+                    f"{archive_label}: API_VERSION constant is "
+                    f"{api_version.constant_value!r}, expected 1"
+                )
+
+    enum_field_flags = _ACC_PUBLIC | _ACC_STATIC | _ACC_FINAL | _ACC_ENUM
+    for class_path, constants in _SERVER_API_ENUM_CONSTANTS.items():
+        declaration = declarations.get(class_path)
+        if declaration is None:
+            continue
+        descriptor = f"L{class_path[:-6]};"
+        for constant in constants:
+            field = declaration.fields.get((constant, descriptor))
+            if field is None:
+                errors.append(
+                    f"{archive_label}: public server API enum {class_path} lacks "
+                    f"constant field {constant}:{descriptor}"
+                )
+                continue
+            missing = _missing_access_flags(field.access_flags, enum_field_flags)
+            forbidden = _unexpected_access_flags(
+                field.access_flags, _ACC_PRIVATE | _ACC_PROTECTED
+            )
+            if missing or forbidden:
+                errors.append(
+                    f"{archive_label}: public server API enum constant "
+                    f"{class_path}#{constant} has invalid modifiers "
+                    f"0x{field.access_flags:04x}"
+                )
+
+    # Holder is required executable support for the facade, not part of the
+    # public ABI. Its visibility is recorded in InnerClasses rather than in
+    # the nested classfile's top-level access_flags field.
+    if _SERVER_API_HOLDER_CLASS not in names:
+        errors.append(
+            f"{archive_label}: missing private server API support class "
+            f"{_SERVER_API_HOLDER_CLASS}"
+        )
+    else:
+        try:
+            holder_data = archive.read(_SERVER_API_HOLDER_CLASS)
+            holder = _classfile_declaration(holder_data)
+            holder_method_references = _classfile_method_references(holder_data)
+            holder_pool = _classfile_pool(holder_data)
+        except (KeyError, ValueError) as error:
+            errors.append(
+                f"{archive_label}: cannot inspect private server API support class "
+                f"{_SERVER_API_HOLDER_CLASS} ({error})"
+            )
+        else:
+            if holder.major > _JAVA_21_CLASSFILE_MAJOR:
+                errors.append(
+                    f"{archive_label}: private server API support class "
+                    f"{_SERVER_API_HOLDER_CLASS} uses classfile major {holder.major}, "
+                    f"expected <= {_JAVA_21_CLASSFILE_MAJOR}"
+                )
+            if holder.access_flags & (
+                _ACC_PUBLIC
+                | _ACC_PROTECTED
+                | _ACC_INTERFACE
+                | _ACC_ABSTRACT
+                | _ACC_ENUM
+                | _ACC_ANNOTATION
+            ):
+                errors.append(
+                    f"{archive_label}: {_SERVER_API_HOLDER_CLASS} must remain "
+                    "non-public concrete executable support"
+                )
+            holder_flags = holder.inner_class_access.get(
+                _SERVER_API_HOLDER_CLASS[:-6]
+            )
+            required_holder_flags = _ACC_PRIVATE | _ACC_STATIC | _ACC_FINAL
+            if holder_flags is None or _missing_access_flags(
+                holder_flags, required_holder_flags
+            ) or _unexpected_access_flags(holder_flags, _ACC_PUBLIC | _ACC_PROTECTED):
+                errors.append(
+                    f"{archive_label}: {_SERVER_API_HOLDER_CLASS} must remain "
+                    "private static final executable support"
+                )
+            instance = holder.fields.get(
+                (
+                    "INSTANCE",
+                    "Lcom/reign/betterlore/api/server/BetterLoreServerApi;",
+                )
+            )
+            required_instance_flags = _ACC_PRIVATE | _ACC_STATIC | _ACC_FINAL
+            if instance is None or _missing_access_flags(
+                instance.access_flags, required_instance_flags
+            ):
+                errors.append(
+                    f"{archive_label}: private server API Holder lacks its "
+                    "private static final INSTANCE field"
+                )
+            clinit_flags = holder.methods.get(("<clinit>", "()V"))
+            if clinit_flags is None or not clinit_flags & _ACC_STATIC:
+                errors.append(
+                    f"{archive_label}: private server API Holder lacks its "
+                    "static initializer"
+                )
+            instantiate_reference = (
+                "com/reign/betterlore/compat/CompatibilityRuntime",
+                "instantiate",
+                "(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;",
+            )
+            if instantiate_reference not in holder_method_references:
+                errors.append(
+                    f"{archive_label}: private server API Holder does not invoke "
+                    "CompatibilityRuntime.instantiate(String, Class)"
+                )
+            implementation_name = _SERVER_API_IMPLEMENTATION_INTERNAL_NAME.replace(
+                "/", "."
+            )
+            if implementation_name not in holder_pool.utf8:
+                errors.append(
+                    f"{archive_label}: private server API Holder does not name "
+                    f"runtime implementation {implementation_name}"
+                )
+
+
+def _generated_runtime_class_path(
+    loader: str,
+    family_id: str,
+    root_path: str,
+) -> str:
+    relative = root_path[len(_BETTER_LORE_INTERNAL_PREFIX) :]
+    return (
+        f"com/reign/betterlore/compat/generated/{loader}/{family_id}/{relative}"
+    )
+
+
+def _is_server_api_validator_reference(internal_name: str) -> bool:
+    return internal_name == _SERVER_API_VALIDATOR_INTERNAL_NAME or (
+        internal_name.startswith("com/reign/betterlore/compat/generated/")
+        and internal_name.endswith(
+            "/internal/serverapi/AnvilEditorDraftValidator"
+        )
+    )
+
+
+def _is_server_api_submission_reference(internal_name: str) -> bool:
+    return internal_name == _SERVER_API_SUBMISSION_INTERNAL_NAME or (
+        internal_name.startswith("com/reign/betterlore/compat/generated/")
+        and internal_name.endswith(
+            "/internal/serverapi/AnvilEditorDraftSubmission"
+        )
+    )
+
+
+def _validate_server_api_runtime_support(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+    *,
+    loader: str | None = None,
+    family_ids: tuple[str, ...] = (),
+) -> None:
+    """Validate the runtime selected behind the stable, unrelocated facade."""
+
+    selected: list[tuple[str, str]] = []
+    if loader is None:
+        selected.append(("exact implementation", _SERVER_API_IMPLEMENTATION_CLASS))
+    else:
+        for family_id in family_ids:
+            generated = _generated_runtime_class_path(
+                loader, family_id, _SERVER_API_IMPLEMENTATION_CLASS
+            )
+            if generated in names:
+                selected.append((f"{loader}/{family_id}", generated))
+            elif _SERVER_API_IMPLEMENTATION_CLASS in names:
+                selected.append(
+                    (f"{loader}/{family_id} root fallback", _SERVER_API_IMPLEMENTATION_CLASS)
+                )
+            else:
+                errors.append(
+                    f"{archive_label}: no server API implementation is selectable for "
+                    f"{loader}/{family_id}; expected {generated} or "
+                    f"{_SERVER_API_IMPLEMENTATION_CLASS}"
+                )
+
+    validated: set[str] = set()
+    for selection_label, implementation_path in selected:
+        if implementation_path in validated:
+            continue
+        validated.add(implementation_path)
+        if implementation_path not in names:
+            errors.append(
+                f"{archive_label}: missing server API {selection_label}: "
+                f"{implementation_path}"
+            )
+            continue
+        try:
+            implementation_data = archive.read(implementation_path)
+            implementation = _classfile_declaration(implementation_data)
+            implementation_references = _classfile_structural_references(
+                implementation_data
+            )
+            implementation_method_references = _classfile_method_references(
+                implementation_data
+            )
+        except (KeyError, ValueError) as error:
+            errors.append(
+                f"{archive_label}: cannot inspect server API {selection_label} "
+                f"{implementation_path} ({error})"
+            )
+            continue
+
+        expected_name = implementation_path[:-6]
+        if implementation.this_class != expected_name:
+            errors.append(
+                f"{archive_label}: server API implementation entry "
+                f"{implementation_path} declares {implementation.this_class}"
+            )
+        required_class_flags = _ACC_PUBLIC
+        forbidden_class_flags = _ACC_INTERFACE | _ACC_ABSTRACT | _ACC_ENUM | _ACC_ANNOTATION
+        if _missing_access_flags(
+            implementation.access_flags, required_class_flags
+        ) or _unexpected_access_flags(
+            implementation.access_flags, forbidden_class_flags
+        ):
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                f"is not a public concrete class (flags "
+                f"0x{implementation.access_flags:04x})"
+            )
+        constructor_flags = implementation.methods.get(("<init>", "()V"))
+        if constructor_flags is None or not constructor_flags & _ACC_PUBLIC or (
+            constructor_flags & (_ACC_STATIC | _ACC_ABSTRACT)
+        ):
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                "lacks a public instance no-argument constructor"
+            )
+        if _SERVER_API_CLASS[:-6] not in implementation.interfaces:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                f"does not directly implement {_SERVER_API_CLASS[:-6]}"
+            )
+
+        missing_runtime_references = sorted(
+            reference + ".class"
+            for reference in implementation_references
+            if reference.startswith(_BETTER_LORE_INTERNAL_PREFIX)
+            and reference + ".class" not in names
+        )
+        if missing_runtime_references:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                "has missing runtime support reference(s): "
+                + ", ".join(missing_runtime_references)
+            )
+
+        validator_calls = sorted(
+            reference
+            for reference in implementation_method_references
+            if _is_server_api_validator_reference(reference[0])
+            and reference[1:] == _SERVER_API_VALIDATOR_METHOD
+        )
+        if len(validator_calls) != 1:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                "must invoke exactly one selected AnvilEditorDraftValidator.validate "
+                f"method; found {validator_calls!r}"
+            )
+            continue
+
+        validator_internal_name = validator_calls[0][0]
+        validator_path = validator_internal_name + ".class"
+        if validator_path not in names:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                f"calls missing validator {validator_path}"
+            )
+            continue
+        try:
+            validator = _classfile_declaration(archive.read(validator_path))
+        except (KeyError, ValueError) as error:
+            errors.append(
+                f"{archive_label}: cannot inspect server API validator "
+                f"{validator_path} ({error})"
+            )
+            continue
+        if validator.this_class != validator_internal_name:
+            errors.append(
+                f"{archive_label}: server API validator entry {validator_path} "
+                f"declares {validator.this_class}"
+            )
+        if validator.access_flags & (
+            _ACC_INTERFACE | _ACC_ABSTRACT | _ACC_ENUM | _ACC_ANNOTATION
+        ):
+            errors.append(
+                f"{archive_label}: server API validator {validator_path} is not "
+                f"a concrete class (flags 0x{validator.access_flags:04x})"
+            )
+        implementation_package = implementation.this_class.rsplit("/", 1)[0]
+        validator_package = validator.this_class.rsplit("/", 1)[0]
+        cross_package = implementation_package != validator_package
+        if cross_package and not validator.access_flags & _ACC_PUBLIC:
+            errors.append(
+                f"{archive_label}: cross-relocated server API validator "
+                f"{validator_path} is not public to {implementation_path}"
+            )
+        validator_method_flags = validator.methods.get(_SERVER_API_VALIDATOR_METHOD)
+        required_validator_flags = _ACC_STATIC | (_ACC_PUBLIC if cross_package else 0)
+        forbidden_validator_flags = _ACC_PRIVATE | _ACC_ABSTRACT
+        if validator_method_flags is None:
+            errors.append(
+                f"{archive_label}: server API validator {validator_path} lacks "
+                f"{_SERVER_API_VALIDATOR_METHOD[0]}"
+                f"{_SERVER_API_VALIDATOR_METHOD[1]}"
+            )
+        elif _missing_access_flags(
+            validator_method_flags, required_validator_flags
+        ) or _unexpected_access_flags(
+            validator_method_flags, forbidden_validator_flags
+        ):
+            errors.append(
+                f"{archive_label}: server API validator {validator_path} is not "
+                f"callable from {implementation_path} (method flags "
+                f"0x{validator_method_flags:04x})"
+            )
+
+        submission_calls = sorted(
+            reference
+            for reference in implementation_method_references
+            if _is_server_api_submission_reference(reference[0])
+            and reference[1] == "route"
+        )
+        valid_submission_calls = [
+            reference
+            for reference in submission_calls
+            if reference[2]
+            == (
+                "(Lcom/reign/betterlore/api/server/AnvilEditorDraft;"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation;"
+                f"ZIIZL{reference[0]}$DraftApplier;)"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftResult;"
+            )
+        ]
+        if len(valid_submission_calls) != 1:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                "must call the selected public AnvilEditorDraftSubmission.route; "
+                f"found {submission_calls!r}"
+            )
+        else:
+            submission_internal_name = valid_submission_calls[0][0]
+            submission_path = submission_internal_name + ".class"
+            draft_applier_internal_name = (
+                submission_internal_name + "$DraftApplier"
+            )
+            draft_applier_path = draft_applier_internal_name + ".class"
+            if submission_path not in names:
+                errors.append(
+                    f"{archive_label}: server API implementation "
+                    f"{implementation_path} calls missing submission router "
+                    f"{submission_path}"
+                )
+            else:
+                try:
+                    submission = _classfile_declaration(
+                        archive.read(submission_path)
+                    )
+                except (KeyError, ValueError) as error:
+                    errors.append(
+                        f"{archive_label}: cannot inspect server API submission "
+                        f"router {submission_path} ({error})"
+                    )
+                else:
+                    submission_forbidden = (
+                        _ACC_INTERFACE | _ACC_ABSTRACT | _ACC_ENUM | _ACC_ANNOTATION
+                    )
+                    if not submission.access_flags & _ACC_PUBLIC or (
+                        submission.access_flags & submission_forbidden
+                    ):
+                        errors.append(
+                            f"{archive_label}: server API submission router "
+                            f"{submission_path} must remain a public concrete class"
+                        )
+                    route_method = ("route", valid_submission_calls[0][2])
+                    route_flags = submission.methods.get(route_method)
+                    required_route_flags = _ACC_PUBLIC | _ACC_STATIC
+                    if route_flags is None or _missing_access_flags(
+                        route_flags, required_route_flags
+                    ) or _unexpected_access_flags(
+                        route_flags, _ACC_PRIVATE | _ACC_PROTECTED | _ACC_ABSTRACT
+                    ):
+                        errors.append(
+                            f"{archive_label}: server API submission router "
+                            f"{submission_path} lacks callable public static "
+                            f"route{route_method[1]}"
+                        )
+
+            if draft_applier_path not in names:
+                errors.append(
+                    f"{archive_label}: server API submission router lacks public "
+                    f"DraftApplier support {draft_applier_path}"
+                )
+            else:
+                try:
+                    draft_applier = _classfile_declaration(
+                        archive.read(draft_applier_path)
+                    )
+                except (KeyError, ValueError) as error:
+                    errors.append(
+                        f"{archive_label}: cannot inspect server API DraftApplier "
+                        f"{draft_applier_path} ({error})"
+                    )
+                else:
+                    required_applier_class_flags = (
+                        _ACC_PUBLIC | _ACC_INTERFACE | _ACC_ABSTRACT
+                    )
+                    if _missing_access_flags(
+                        draft_applier.access_flags,
+                        required_applier_class_flags,
+                    ) or _unexpected_access_flags(
+                        draft_applier.access_flags,
+                        _ACC_ENUM | _ACC_ANNOTATION,
+                    ):
+                        errors.append(
+                            f"{archive_label}: server API DraftApplier "
+                            f"{draft_applier_path} must remain a public interface"
+                        )
+                    apply_flags = draft_applier.methods.get(
+                        ("apply", _SERVER_DRAFT_APPLY_DESCRIPTOR)
+                    )
+                    required_apply_flags = _ACC_PUBLIC | _ACC_ABSTRACT
+                    if apply_flags is None or _missing_access_flags(
+                        apply_flags, required_apply_flags
+                    ) or _unexpected_access_flags(apply_flags, _ACC_STATIC):
+                        errors.append(
+                            f"{archive_label}: server API DraftApplier "
+                            f"{draft_applier_path} lacks public instance "
+                            f"apply{_SERVER_DRAFT_APPLY_DESCRIPTOR}"
+                        )
+
+        bridge_call = (
+            _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME,
+            "betterLore$handleServerDraft",
+            _SERVER_DRAFT_APPLY_DESCRIPTOR,
+        )
+        if bridge_call not in implementation_method_references:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                "does not link the canonical public "
+                "AnvilLoreMenuBridge.betterLore$handleServerDraft member"
+            )
+        bridge_path = _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME + ".class"
+        if bridge_path not in names:
+            errors.append(
+                f"{archive_label}: server API implementation {implementation_path} "
+                f"requires missing bridge {bridge_path}"
+            )
+        else:
+            try:
+                bridge = _classfile_declaration(archive.read(bridge_path))
+            except (KeyError, ValueError) as error:
+                errors.append(
+                    f"{archive_label}: cannot inspect server API bridge "
+                    f"{bridge_path} ({error})"
+                )
+            else:
+                required_bridge_flags = _ACC_PUBLIC | _ACC_INTERFACE | _ACC_ABSTRACT
+                if _missing_access_flags(
+                    bridge.access_flags, required_bridge_flags
+                ) or _unexpected_access_flags(
+                    bridge.access_flags, _ACC_ENUM | _ACC_ANNOTATION
+                ):
+                    errors.append(
+                        f"{archive_label}: server API bridge {bridge_path} must "
+                        "remain a public interface"
+                    )
+                bridge_method_flags = bridge.methods.get(bridge_call[1:])
+                required_bridge_method_flags = _ACC_PUBLIC | _ACC_ABSTRACT
+                if bridge_method_flags is None or _missing_access_flags(
+                    bridge_method_flags, required_bridge_method_flags
+                ) or _unexpected_access_flags(
+                    bridge_method_flags, _ACC_STATIC
+                ):
+                    errors.append(
+                        f"{archive_label}: server API bridge {bridge_path} lacks "
+                        "public instance betterLore$handleServerDraft"
+                        f"{_SERVER_DRAFT_APPLY_DESCRIPTOR}"
+                    )
 
 
 def _validate_better_lore_structural_references(
@@ -1276,6 +2399,21 @@ def _validate_flat_adapter(
     try:
         with zipfile.ZipFile(path) as archive:
             names = set(archive.namelist())
+            _validate_server_api_contract(
+                archive,
+                names,
+                errors,
+                label,
+                "net/minecraft/server/level/ServerPlayer",
+            )
+            _validate_server_api_runtime_support(
+                archive,
+                names,
+                errors,
+                label,
+                loader=artifact.loader,
+                family_ids=tuple(sorted(expected_family_ids)),
+            )
             required_stable = {
                 *_COMPATIBILITY_RUNTIME_CLASSES,
                 _MIXIN_PLUGIN_CLASS_PATH,
@@ -1775,8 +2913,449 @@ def _write_synthetic_fabric_jar(
                 archive.writestr(provider.replace(".", "/") + ".class", b"not-a-real-class")
 
 
+def _synthetic_classfile(
+    internal_name: str,
+    methods: set[tuple[str, str]],
+    *,
+    major: int = _JAVA_21_CLASSFILE_MAJOR,
+    non_public: tuple[str, str] | None = None,
+    class_access: int = _ACC_PUBLIC | 0x0020,
+    interfaces: tuple[str, ...] = (),
+    fields: Mapping[tuple[str, str], tuple[int, int | None]] | None = None,
+    method_access: Mapping[tuple[str, str], int] | None = None,
+    method_signatures: Mapping[tuple[str, str], str] | None = None,
+    record: bool = False,
+    inner_class: tuple[str, str, int] | None = None,
+    references: tuple[str, ...] = (),
+    method_references: tuple[tuple[str, str, str], ...] = (),
+    utf8_constants: tuple[str, ...] = (),
+) -> bytes:
+    """Build the small classfile subset consumed by the dependency-free parser."""
+
+    constants: list[bytes] = []
+    utf8_indexes: dict[str, int] = {}
+    class_indexes: dict[str, int] = {}
+
+    def add_utf8(value: str) -> int:
+        existing = utf8_indexes.get(value)
+        if existing is not None:
+            return existing
+        encoded = value.encode("utf-8")
+        constants.append(b"\x01" + len(encoded).to_bytes(2, "big") + encoded)
+        index = len(constants)
+        utf8_indexes[value] = index
+        return index
+
+    def add_class(value: str) -> int:
+        existing = class_indexes.get(value)
+        if existing is not None:
+            return existing
+        name_index = add_utf8(value)
+        constants.append(b"\x07" + name_index.to_bytes(2, "big"))
+        index = len(constants)
+        class_indexes[value] = index
+        return index
+
+    def add_integer(value: int) -> int:
+        constants.append(b"\x03" + value.to_bytes(4, "big", signed=True))
+        return len(constants)
+
+    def add_name_and_type(name: str, descriptor: str) -> int:
+        name_index = add_utf8(name)
+        descriptor_index = add_utf8(descriptor)
+        constants.append(
+            b"\x0c"
+            + name_index.to_bytes(2, "big")
+            + descriptor_index.to_bytes(2, "big")
+        )
+        return len(constants)
+
+    def add_method_reference(owner: str, name: str, descriptor: str) -> None:
+        owner_index = add_class(owner)
+        name_and_type_index = add_name_and_type(name, descriptor)
+        constants.append(
+            b"\x0a"
+            + owner_index.to_bytes(2, "big")
+            + name_and_type_index.to_bytes(2, "big")
+        )
+
+    this_class = add_class(internal_name)
+    super_class = add_class("java/lang/Object")
+    interface_indexes = [add_class(interface) for interface in interfaces]
+    for reference in references:
+        add_class(reference)
+    for owner, name, descriptor in method_references:
+        add_method_reference(owner, name, descriptor)
+    for value in utf8_constants:
+        add_utf8(value)
+
+    field_entries: list[tuple[int, int, int, int | None]] = []
+    for (name, descriptor), (access, constant) in sorted((fields or {}).items()):
+        name_index = add_utf8(name)
+        descriptor_index = add_utf8(descriptor)
+        constant_index = add_integer(constant) if constant is not None else None
+        field_entries.append((access, name_index, descriptor_index, constant_index))
+    constant_value_name = add_utf8("ConstantValue") if any(
+        entry[3] is not None for entry in field_entries
+    ) else None
+
+    method_entries: list[tuple[int, int, int, int | None]] = []
+    for name, descriptor in sorted(methods):
+        name_index = add_utf8(name)
+        descriptor_index = add_utf8(descriptor)
+        access = (method_access or {}).get((name, descriptor), _ACC_PUBLIC)
+        if (name, descriptor) == non_public:
+            access = _ACC_PRIVATE
+        signature = (method_signatures or {}).get((name, descriptor))
+        signature_index = add_utf8(signature) if signature is not None else None
+        method_entries.append((access, name_index, descriptor_index, signature_index))
+    signature_name = add_utf8("Signature") if any(
+        entry[3] is not None for entry in method_entries
+    ) else None
+
+    class_attributes: list[tuple[int, bytes]] = []
+    if record:
+        class_attributes.append((add_utf8("Record"), b"\x00\x00"))
+    if inner_class is not None:
+        outer_name, simple_name, flags = inner_class
+        payload = (
+            b"\x00\x01"
+            + this_class.to_bytes(2, "big")
+            + add_class(outer_name).to_bytes(2, "big")
+            + add_utf8(simple_name).to_bytes(2, "big")
+            + flags.to_bytes(2, "big")
+        )
+        class_attributes.append((add_utf8("InnerClasses"), payload))
+
+    output = bytearray(b"\xca\xfe\xba\xbe\x00\x00")
+    output.extend(major.to_bytes(2, "big"))
+    output.extend((len(constants) + 1).to_bytes(2, "big"))
+    for constant in constants:
+        output.extend(constant)
+    output.extend(class_access.to_bytes(2, "big"))
+    output.extend(this_class.to_bytes(2, "big"))
+    output.extend(super_class.to_bytes(2, "big"))
+    output.extend(len(interface_indexes).to_bytes(2, "big"))
+    for interface_index in interface_indexes:
+        output.extend(interface_index.to_bytes(2, "big"))
+    output.extend(len(field_entries).to_bytes(2, "big"))
+    for access, name_index, descriptor_index, constant_index in field_entries:
+        output.extend(access.to_bytes(2, "big"))
+        output.extend(name_index.to_bytes(2, "big"))
+        output.extend(descriptor_index.to_bytes(2, "big"))
+        output.extend((1 if constant_index is not None else 0).to_bytes(2, "big"))
+        if constant_index is not None:
+            output.extend(constant_value_name.to_bytes(2, "big"))  # type: ignore[union-attr]
+            output.extend(b"\x00\x00\x00\x02")
+            output.extend(constant_index.to_bytes(2, "big"))
+    output.extend(len(method_entries).to_bytes(2, "big"))
+    for access, name_index, descriptor_index, signature_index in method_entries:
+        output.extend(access.to_bytes(2, "big"))
+        output.extend(name_index.to_bytes(2, "big"))
+        output.extend(descriptor_index.to_bytes(2, "big"))
+        output.extend((1 if signature_index is not None else 0).to_bytes(2, "big"))
+        if signature_index is not None:
+            output.extend(signature_name.to_bytes(2, "big"))  # type: ignore[union-attr]
+            output.extend(b"\x00\x00\x00\x02")
+            output.extend(signature_index.to_bytes(2, "big"))
+    output.extend(len(class_attributes).to_bytes(2, "big"))
+    for name_index, payload in class_attributes:
+        output.extend(name_index.to_bytes(2, "big"))
+        output.extend(len(payload).to_bytes(4, "big"))
+        output.extend(payload)
+    return bytes(output)
+
+
+def _synthetic_server_api_methods(
+    server_player_internal_name: str,
+) -> dict[str, set[tuple[str, str]]]:
+    methods = {
+        path: set(required) for path, required in _SERVER_API_REQUIRED_METHODS.items()
+    }
+    methods[_SERVER_API_CLASS].update(
+        (
+            method_name,
+            f"(L{server_player_internal_name};{remaining_parameters})"
+            f"{return_descriptor}",
+        )
+        for method_name, remaining_parameters, return_descriptor in _SERVER_API_PLAYER_METHODS
+    )
+    return methods
+
+
+def _write_synthetic_server_api_jar(
+    path: Path,
+    server_player_internal_name: str,
+    *,
+    omit: str | None = None,
+    relocated: str | None = None,
+    too_new: str | None = None,
+    missing_method: tuple[str, tuple[str, str]] | None = None,
+    non_public: tuple[str, tuple[str, str]] | None = None,
+    class_access_override: tuple[str, int] | None = None,
+    method_access_override: tuple[str, tuple[str, str], int] | None = None,
+    api_version_flags: int = _ACC_PUBLIC | _ACC_STATIC | _ACC_FINAL,
+    api_version_value: int | None = 1,
+    omit_field: tuple[str, str, str] | None = None,
+    field_access_override: tuple[str, str, str, int] | None = None,
+    session_signature: str | None = "default",
+    holder_inner_flags: int = _ACC_PRIVATE | _ACC_STATIC | _ACC_FINAL,
+    include_runtime: bool = True,
+    implementation_path: str = _SERVER_API_IMPLEMENTATION_CLASS,
+    implementation_constructor_flags: int = _ACC_PUBLIC,
+    implementation_interfaces: tuple[str, ...] = (_SERVER_API_CLASS[:-6],),
+    validator_path: str = _SERVER_API_VALIDATOR_CLASS,
+    validator_call_path: str | None = None,
+    validator_method_flags: int = _ACC_STATIC,
+    omit_validator: bool = False,
+    submission_path: str = _SERVER_API_SUBMISSION_INTERNAL_NAME + ".class",
+    submission_route_flags: int = _ACC_PUBLIC | _ACC_STATIC,
+    draft_applier_method_flags: int = _ACC_PUBLIC | _ACC_ABSTRACT,
+    omit_submission: bool = False,
+    bridge_method_flags: int = _ACC_PUBLIC | _ACC_ABSTRACT,
+    omit_bridge: bool = False,
+) -> None:
+    methods_by_class = _synthetic_server_api_methods(server_player_internal_name)
+    if missing_method is not None:
+        methods_by_class[missing_method[0]].discard(missing_method[1])
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for class_path in sorted(_SERVER_API_REQUIRED_CLASSES):
+            if class_path == omit:
+                continue
+            methods = methods_by_class.get(class_path, set())
+            if class_path == _SERVER_API_CLASS:
+                class_access = _ACC_PUBLIC | _ACC_INTERFACE | _ACC_ABSTRACT
+            elif class_path in _SERVER_API_RECORD_CLASSES:
+                class_access = _ACC_PUBLIC | _ACC_FINAL | 0x0020
+            elif class_path in _SERVER_API_ENUM_CONSTANTS:
+                class_access = _ACC_PUBLIC | _ACC_FINAL | 0x0020 | _ACC_ENUM
+            else:
+                class_access = _ACC_PUBLIC | _ACC_FINAL | 0x0020
+            if class_access_override is not None and class_access_override[0] == class_path:
+                class_access = class_access_override[1]
+
+            access_by_method: dict[tuple[str, str], int] = {}
+            default_method_flags, _ = _server_api_method_flag_contract(class_path)
+            for method in methods:
+                access_by_method[method] = default_method_flags
+            if method_access_override is not None and method_access_override[0] == class_path:
+                access_by_method[method_access_override[1]] = method_access_override[2]
+
+            class_fields: dict[tuple[str, str], tuple[int, int | None]] = {}
+            if class_path == _SERVER_API_CLASS:
+                class_fields[("API_VERSION", "I")] = (
+                    api_version_flags,
+                    api_version_value,
+                )
+            constants = _SERVER_API_ENUM_CONSTANTS.get(class_path)
+            if constants is not None:
+                descriptor = f"L{class_path[:-6]};"
+                for constant in constants:
+                    class_fields[(constant, descriptor)] = (
+                        _ACC_PUBLIC | _ACC_STATIC | _ACC_FINAL | _ACC_ENUM,
+                        None,
+                    )
+            if omit_field is not None and omit_field[0] == class_path:
+                class_fields.pop((omit_field[1], omit_field[2]), None)
+            if field_access_override is not None and field_access_override[0] == class_path:
+                field_key = (field_access_override[1], field_access_override[2])
+                if field_key in class_fields:
+                    class_fields[field_key] = (
+                        field_access_override[3],
+                        class_fields[field_key][1],
+                    )
+
+            signatures: dict[tuple[str, str], str] = {}
+            if class_path == _SERVER_API_CLASS and session_signature is not None:
+                server_player_descriptor = (
+                    f"L{server_player_internal_name};"
+                )
+                session_method = (
+                    "currentAnvilSession",
+                    f"({server_player_descriptor})Ljava/util/Optional;",
+                )
+                signatures[session_method] = (
+                    f"({server_player_descriptor})"
+                    "Ljava/util/Optional<"
+                    "Lcom/reign/betterlore/api/server/AnvilEditorSession;>;"
+                    if session_signature == "default"
+                    else session_signature
+                )
+            archive.writestr(
+                class_path,
+                _synthetic_classfile(
+                    class_path[:-6],
+                    methods,
+                    major=(
+                        _JAVA_21_CLASSFILE_MAJOR + 1
+                        if class_path == too_new
+                        else _JAVA_21_CLASSFILE_MAJOR
+                    ),
+                    class_access=class_access,
+                    fields=class_fields,
+                    method_access=access_by_method,
+                    method_signatures=signatures,
+                    record=class_path in _SERVER_API_RECORD_CLASSES,
+                    non_public=(
+                        non_public[1]
+                        if non_public is not None and non_public[0] == class_path
+                        else None
+                    ),
+                ),
+            )
+        if _SERVER_API_HOLDER_CLASS != omit:
+            holder_fields = {
+                (
+                    "INSTANCE",
+                    "Lcom/reign/betterlore/api/server/BetterLoreServerApi;",
+                ): (_ACC_PRIVATE | _ACC_STATIC | _ACC_FINAL, None)
+            }
+            if omit_field is not None and omit_field[0] == _SERVER_API_HOLDER_CLASS:
+                holder_fields.pop((omit_field[1], omit_field[2]), None)
+            holder_methods = {("<clinit>", "()V")}
+            archive.writestr(
+                _SERVER_API_HOLDER_CLASS,
+                _synthetic_classfile(
+                    _SERVER_API_HOLDER_CLASS[:-6],
+                    holder_methods,
+                    major=(
+                        _JAVA_21_CLASSFILE_MAJOR + 1
+                        if _SERVER_API_HOLDER_CLASS == too_new
+                        else _JAVA_21_CLASSFILE_MAJOR
+                    ),
+                    class_access=_ACC_FINAL | 0x0020,
+                    fields=holder_fields,
+                    method_access={("<clinit>", "()V"): _ACC_STATIC},
+                    inner_class=(
+                        _SERVER_API_FACADE_CLASS[:-6],
+                        "Holder",
+                        holder_inner_flags,
+                    ),
+                    method_references=(
+                        (
+                            "com/reign/betterlore/compat/CompatibilityRuntime",
+                            "instantiate",
+                            "(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;",
+                        ),
+                    ),
+                    utf8_constants=(
+                        _SERVER_API_IMPLEMENTATION_INTERNAL_NAME.replace("/", "."),
+                    ),
+                ),
+            )
+        if relocated is not None:
+            archive.writestr(
+                relocated,
+                _synthetic_classfile(relocated[:-6], set()),
+            )
+        if include_runtime:
+            call_path = validator_call_path or validator_path
+            submission_internal_name = submission_path[:-6]
+            draft_applier_internal_name = submission_internal_name + "$DraftApplier"
+            submission_descriptor = (
+                "(Lcom/reign/betterlore/api/server/AnvilEditorDraft;"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftValidation;"
+                f"ZIIZL{draft_applier_internal_name};)"
+                "Lcom/reign/betterlore/api/server/AnvilEditorDraftResult;"
+            )
+            implementation_methods = {("<init>", "()V")}
+            archive.writestr(
+                implementation_path,
+                _synthetic_classfile(
+                    implementation_path[:-6],
+                    implementation_methods,
+                    class_access=_ACC_PUBLIC | _ACC_FINAL | 0x0020,
+                    interfaces=implementation_interfaces,
+                    method_access={
+                        ("<init>", "()V"): implementation_constructor_flags
+                    },
+                    references=(
+                        call_path[:-6],
+                        submission_internal_name,
+                        draft_applier_internal_name,
+                        _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME,
+                    ),
+                    method_references=(
+                        (
+                            call_path[:-6],
+                            _SERVER_API_VALIDATOR_METHOD[0],
+                            _SERVER_API_VALIDATOR_METHOD[1],
+                        ),
+                        (
+                            submission_internal_name,
+                            "route",
+                            submission_descriptor,
+                        ),
+                        (
+                            _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME,
+                            "betterLore$handleServerDraft",
+                            _SERVER_DRAFT_APPLY_DESCRIPTOR,
+                        ),
+                    ),
+                ),
+            )
+            if not omit_validator:
+                archive.writestr(
+                    validator_path,
+                    _synthetic_classfile(
+                        validator_path[:-6],
+                        {_SERVER_API_VALIDATOR_METHOD},
+                        class_access=_ACC_FINAL | 0x0020,
+                        method_access={
+                            _SERVER_API_VALIDATOR_METHOD: validator_method_flags
+                        },
+                    ),
+                )
+            if not omit_submission:
+                archive.writestr(
+                    submission_path,
+                    _synthetic_classfile(
+                        submission_internal_name,
+                        {("route", submission_descriptor)},
+                        class_access=_ACC_PUBLIC | _ACC_FINAL | 0x0020,
+                        method_access={
+                            ("route", submission_descriptor): submission_route_flags
+                        },
+                    ),
+                )
+                archive.writestr(
+                    draft_applier_internal_name + ".class",
+                    _synthetic_classfile(
+                        draft_applier_internal_name,
+                        {("apply", _SERVER_DRAFT_APPLY_DESCRIPTOR)},
+                        class_access=_ACC_PUBLIC | _ACC_INTERFACE | _ACC_ABSTRACT,
+                        method_access={
+                            (
+                                "apply",
+                                _SERVER_DRAFT_APPLY_DESCRIPTOR,
+                            ): draft_applier_method_flags
+                        },
+                    ),
+                )
+            if not omit_bridge:
+                archive.writestr(
+                    _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME + ".class",
+                    _synthetic_classfile(
+                        _ANVIL_LORE_MENU_BRIDGE_INTERNAL_NAME,
+                        {
+                            (
+                                "betterLore$handleServerDraft",
+                                _SERVER_DRAFT_APPLY_DESCRIPTOR,
+                            )
+                        },
+                        class_access=_ACC_PUBLIC | _ACC_INTERFACE | _ACC_ABSTRACT,
+                        method_access={
+                            (
+                                "betterLore$handleServerDraft",
+                                _SERVER_DRAFT_APPLY_DESCRIPTOR,
+                            ): bridge_method_flags
+                        },
+                    ),
+                )
+
+
 def _run_self_test() -> int:
-    """Exercise success plus two high-value failure paths without Gradle."""
+    """Exercise release and server-API contract failures without Gradle."""
 
     with tempfile.TemporaryDirectory(prefix="better-lore-release-verifier-") as temporary:
         directory = Path(temporary)
@@ -1816,6 +3395,439 @@ def _run_self_test() -> int:
         )
         if not any("declares mixin class" in error and "absent from the jar" in error for error in mixin_errors):
             print("SELF-TEST ERROR: missing mixin class was not reported", file=sys.stderr)
+            return 1
+
+        def server_api_errors(
+            path: Path,
+            server_player: str,
+            *,
+            loader: str | None = None,
+            family_ids: tuple[str, ...] = (),
+        ) -> list[str]:
+            api_errors: list[str] = []
+            with zipfile.ZipFile(path) as archive:
+                names = set(archive.namelist())
+                _validate_server_api_contract(
+                    archive,
+                    names,
+                    api_errors,
+                    path.name,
+                    server_player,
+                )
+                _validate_server_api_runtime_support(
+                    archive,
+                    names,
+                    api_errors,
+                    path.name,
+                    loader=loader,
+                    family_ids=family_ids,
+                )
+            return api_errors
+
+        official_player = "net/minecraft/server/level/ServerPlayer"
+        intermediary_player = "net/minecraft/class_3222"
+        valid_api = directory / "valid-server-api.jar"
+        _write_synthetic_server_api_jar(valid_api, official_player)
+        valid_api_errors = server_api_errors(valid_api, official_player)
+        if valid_api_errors:
+            print(
+                "SELF-TEST ERROR: valid server API was rejected:\n"
+                + "\n".join(valid_api_errors),
+                file=sys.stderr,
+            )
+            return 1
+
+        valid_intermediary_api = directory / "valid-intermediary-server-api.jar"
+        _write_synthetic_server_api_jar(valid_intermediary_api, intermediary_player)
+        intermediary_api_errors = server_api_errors(
+            valid_intermediary_api, intermediary_player
+        )
+        if intermediary_api_errors:
+            print(
+                "SELF-TEST ERROR: valid intermediary server API was rejected:\n"
+                + "\n".join(intermediary_api_errors),
+                file=sys.stderr,
+            )
+            return 1
+
+        missing_api = directory / "missing-server-api.jar"
+        _write_synthetic_server_api_jar(
+            missing_api,
+            official_player,
+            omit=_SERVER_API_CLASS_PREFIX + "AnvilEditorSession.class",
+        )
+        if not any(
+            "missing stable public server API class" in error
+            for error in server_api_errors(missing_api, official_player)
+        ):
+            print("SELF-TEST ERROR: missing server API class was not reported", file=sys.stderr)
+            return 1
+
+        relocated_api = directory / "relocated-server-api.jar"
+        _write_synthetic_server_api_jar(
+            relocated_api,
+            official_player,
+            relocated=(
+                "com/reign/betterlore/compat/generated/forge/mc_test/api/server/"
+                "BetterLoreServerApi.class"
+            ),
+        )
+        if not any(
+            "must not be relocated" in error
+            for error in server_api_errors(relocated_api, official_player)
+        ):
+            print("SELF-TEST ERROR: relocated server API was not reported", file=sys.stderr)
+            return 1
+
+        missing_descriptor_api = directory / "missing-server-api-method.jar"
+        get_method = (
+            "get",
+            "()Lcom/reign/betterlore/api/server/BetterLoreServerApi;",
+        )
+        _write_synthetic_server_api_jar(
+            missing_descriptor_api,
+            official_player,
+            missing_method=(
+                _SERVER_API_CLASS_PREFIX + "BetterLoreServerApis.class",
+                get_method,
+            ),
+        )
+        if not any(
+            "lacks required v1 method descriptor" in error
+            for error in server_api_errors(missing_descriptor_api, official_player)
+        ):
+            print("SELF-TEST ERROR: missing server API method was not reported", file=sys.stderr)
+            return 1
+
+        non_public_api = directory / "non-public-server-api-method.jar"
+        _write_synthetic_server_api_jar(
+            non_public_api,
+            official_player,
+            non_public=(
+                _SERVER_API_CLASS_PREFIX + "BetterLoreServerApis.class",
+                get_method,
+            ),
+        )
+        if not any(
+            "server API method(s) are not public" in error
+            for error in server_api_errors(non_public_api, official_player)
+        ):
+            print("SELF-TEST ERROR: non-public server API method was not reported", file=sys.stderr)
+            return 1
+
+        too_new_api = directory / "too-new-server-api.jar"
+        _write_synthetic_server_api_jar(
+            too_new_api,
+            official_player,
+            too_new=_SERVER_API_CLASS_PREFIX + "BetterLoreServerApis$Holder.class",
+        )
+        if not any(
+            "classfile major" in error
+            for error in server_api_errors(too_new_api, official_player)
+        ):
+            print("SELF-TEST ERROR: too-new server API class was not reported", file=sys.stderr)
+            return 1
+
+        invalid_interface = directory / "invalid-server-api-interface.jar"
+        _write_synthetic_server_api_jar(
+            invalid_interface,
+            official_player,
+            class_access_override=(
+                _SERVER_API_CLASS,
+                _ACC_PUBLIC | _ACC_ABSTRACT,
+            ),
+        )
+        if not any(
+            "invalid class modifiers" in error
+            for error in server_api_errors(invalid_interface, official_player)
+        ):
+            print("SELF-TEST ERROR: invalid API interface modifiers were not reported", file=sys.stderr)
+            return 1
+
+        invalid_record = directory / "invalid-server-api-record.jar"
+        _write_synthetic_server_api_jar(
+            invalid_record,
+            official_player,
+            class_access_override=(
+                _SERVER_API_CLASS_PREFIX + "AnvilEditorDraft.class",
+                _ACC_PUBLIC | 0x0020,
+            ),
+        )
+        if not any(
+            "invalid class modifiers" in error
+            for error in server_api_errors(invalid_record, official_player)
+        ):
+            print("SELF-TEST ERROR: invalid API record modifiers were not reported", file=sys.stderr)
+            return 1
+
+        instance_get = directory / "instance-server-api-get.jar"
+        _write_synthetic_server_api_jar(
+            instance_get,
+            official_player,
+            method_access_override=(
+                _SERVER_API_FACADE_CLASS,
+                get_method,
+                _ACC_PUBLIC,
+            ),
+        )
+        if not any(
+            "invalid static/instance modifiers" in error
+            for error in server_api_errors(instance_get, official_player)
+        ):
+            print("SELF-TEST ERROR: instance BetterLoreServerApis.get was not reported", file=sys.stderr)
+            return 1
+
+        bad_version_flags = directory / "bad-server-api-version-flags.jar"
+        _write_synthetic_server_api_jar(
+            bad_version_flags,
+            official_player,
+            api_version_flags=_ACC_PUBLIC | _ACC_FINAL,
+        )
+        if not any(
+            "API_VERSION must be public static final" in error
+            for error in server_api_errors(bad_version_flags, official_player)
+        ):
+            print("SELF-TEST ERROR: invalid API_VERSION modifiers were not reported", file=sys.stderr)
+            return 1
+
+        bad_version_value = directory / "bad-server-api-version-value.jar"
+        _write_synthetic_server_api_jar(
+            bad_version_value,
+            official_player,
+            api_version_value=2,
+        )
+        if not any(
+            "API_VERSION constant" in error
+            for error in server_api_errors(bad_version_value, official_player)
+        ):
+            print("SELF-TEST ERROR: invalid API_VERSION value was not reported", file=sys.stderr)
+            return 1
+
+        enum_path = _SERVER_API_CLASS_PREFIX + "AnvilEditorDraftResult$Status.class"
+        missing_enum_constant = directory / "missing-server-api-enum-constant.jar"
+        _write_synthetic_server_api_jar(
+            missing_enum_constant,
+            official_player,
+            omit_field=(
+                enum_path,
+                "STALE_SESSION",
+                f"L{enum_path[:-6]};",
+            ),
+        )
+        if not any(
+            "lacks constant field STALE_SESSION" in error
+            for error in server_api_errors(missing_enum_constant, official_player)
+        ):
+            print("SELF-TEST ERROR: missing API enum constant was not reported", file=sys.stderr)
+            return 1
+
+        non_public_enum_constant = directory / "non-public-server-api-enum-constant.jar"
+        _write_synthetic_server_api_jar(
+            non_public_enum_constant,
+            official_player,
+            field_access_override=(
+                enum_path,
+                "STALE_SESSION",
+                f"L{enum_path[:-6]};",
+                _ACC_PRIVATE | _ACC_STATIC | _ACC_FINAL | _ACC_ENUM,
+            ),
+        )
+        if not any(
+            "enum constant" in error and "invalid modifiers" in error
+            for error in server_api_errors(non_public_enum_constant, official_player)
+        ):
+            print("SELF-TEST ERROR: inaccessible API enum constant was not reported", file=sys.stderr)
+            return 1
+
+        public_holder = directory / "public-server-api-holder.jar"
+        _write_synthetic_server_api_jar(
+            public_holder,
+            official_player,
+            holder_inner_flags=_ACC_PUBLIC | _ACC_STATIC | _ACC_FINAL,
+        )
+        if not any(
+            "must remain private static final" in error
+            for error in server_api_errors(public_holder, official_player)
+        ):
+            print("SELF-TEST ERROR: public API Holder was not reported", file=sys.stderr)
+            return 1
+
+        wrong_signature = directory / "wrong-server-api-generic-signature.jar"
+        _write_synthetic_server_api_jar(
+            wrong_signature,
+            official_player,
+            session_signature=(
+                f"(L{official_player};)Ljava/util/Optional<Ljava/lang/String;>;"
+            ),
+        )
+        if not any(
+            "currentAnvilSession generic Signature" in error
+            for error in server_api_errors(wrong_signature, official_player)
+        ):
+            print("SELF-TEST ERROR: wrong currentAnvilSession generic payload was not reported", file=sys.stderr)
+            return 1
+
+        missing_implementation = directory / "missing-server-api-implementation.jar"
+        _write_synthetic_server_api_jar(
+            missing_implementation,
+            official_player,
+            include_runtime=False,
+        )
+        if not any(
+            "missing server API exact implementation" in error
+            for error in server_api_errors(missing_implementation, official_player)
+        ):
+            print("SELF-TEST ERROR: missing server API implementation was not reported", file=sys.stderr)
+            return 1
+
+        private_constructor = directory / "private-server-api-constructor.jar"
+        _write_synthetic_server_api_jar(
+            private_constructor,
+            official_player,
+            implementation_constructor_flags=_ACC_PRIVATE,
+        )
+        if not any(
+            "lacks a public instance no-argument constructor" in error
+            for error in server_api_errors(private_constructor, official_player)
+        ):
+            print("SELF-TEST ERROR: private server API constructor was not reported", file=sys.stderr)
+            return 1
+
+        wrong_contract = directory / "wrong-server-api-interface.jar"
+        _write_synthetic_server_api_jar(
+            wrong_contract,
+            official_player,
+            implementation_interfaces=(),
+        )
+        if not any(
+            "does not directly implement" in error
+            for error in server_api_errors(wrong_contract, official_player)
+        ):
+            print("SELF-TEST ERROR: wrong server API implementation contract was not reported", file=sys.stderr)
+            return 1
+
+        missing_validator = directory / "missing-server-api-validator.jar"
+        _write_synthetic_server_api_jar(
+            missing_validator,
+            official_player,
+            omit_validator=True,
+        )
+        if not any(
+            "calls missing validator" in error
+            for error in server_api_errors(missing_validator, official_player)
+        ):
+            print("SELF-TEST ERROR: missing server API validator was not reported", file=sys.stderr)
+            return 1
+
+        instance_validator = directory / "instance-server-api-validator.jar"
+        _write_synthetic_server_api_jar(
+            instance_validator,
+            official_player,
+            validator_method_flags=0,
+        )
+        if not any(
+            "validator" in error and "is not callable" in error
+            for error in server_api_errors(instance_validator, official_player)
+        ):
+            print("SELF-TEST ERROR: instance server API validator was not reported", file=sys.stderr)
+            return 1
+
+        missing_submission = directory / "missing-server-api-submission.jar"
+        _write_synthetic_server_api_jar(
+            missing_submission,
+            official_player,
+            omit_submission=True,
+        )
+        if not any(
+            "calls missing submission router" in error
+            for error in server_api_errors(missing_submission, official_player)
+        ):
+            print("SELF-TEST ERROR: missing submission router was not reported", file=sys.stderr)
+            return 1
+
+        private_route = directory / "private-server-api-route.jar"
+        _write_synthetic_server_api_jar(
+            private_route,
+            official_player,
+            submission_route_flags=_ACC_PRIVATE | _ACC_STATIC,
+        )
+        if not any(
+            "lacks callable public static route" in error
+            for error in server_api_errors(private_route, official_player)
+        ):
+            print("SELF-TEST ERROR: inaccessible submission route was not reported", file=sys.stderr)
+            return 1
+
+        private_applier = directory / "private-server-api-applier.jar"
+        _write_synthetic_server_api_jar(
+            private_applier,
+            official_player,
+            draft_applier_method_flags=_ACC_ABSTRACT,
+        )
+        if not any(
+            "DraftApplier" in error and "lacks public instance apply" in error
+            for error in server_api_errors(private_applier, official_player)
+        ):
+            print("SELF-TEST ERROR: inaccessible DraftApplier was not reported", file=sys.stderr)
+            return 1
+
+        private_bridge = directory / "private-server-api-bridge.jar"
+        _write_synthetic_server_api_jar(
+            private_bridge,
+            official_player,
+            bridge_method_flags=_ACC_ABSTRACT,
+        )
+        if not any(
+            "bridge" in error and "lacks public instance" in error
+            for error in server_api_errors(private_bridge, official_player)
+        ):
+            print("SELF-TEST ERROR: inaccessible anvil bridge member was not reported", file=sys.stderr)
+            return 1
+
+        generated_impl = _generated_runtime_class_path(
+            "forge", "mc_test", _SERVER_API_IMPLEMENTATION_CLASS
+        )
+        generated_validator = _generated_runtime_class_path(
+            "forge", "mc_test", _SERVER_API_VALIDATOR_CLASS
+        )
+        valid_generated = directory / "valid-generated-server-api.jar"
+        _write_synthetic_server_api_jar(
+            valid_generated,
+            official_player,
+            implementation_path=generated_impl,
+            validator_path=generated_validator,
+        )
+        valid_generated_errors = server_api_errors(
+            valid_generated,
+            official_player,
+            loader="forge",
+            family_ids=("mc_test",),
+        )
+        if valid_generated_errors:
+            print(
+                "SELF-TEST ERROR: valid generated server API was rejected:\n"
+                + "\n".join(valid_generated_errors),
+                file=sys.stderr,
+            )
+            return 1
+
+        inaccessible_validator = directory / "inaccessible-server-api-validator.jar"
+        _write_synthetic_server_api_jar(
+            inaccessible_validator,
+            official_player,
+            implementation_path=generated_impl,
+            validator_path=_SERVER_API_VALIDATOR_CLASS,
+        )
+        if not any(
+            "cross-relocated server API validator" in error and "is not public" in error
+            for error in server_api_errors(
+                inaccessible_validator,
+                official_player,
+                loader="forge",
+                family_ids=("mc_test",),
+            )
+        ):
+            print("SELF-TEST ERROR: inaccessible cross-relocated validator was not reported", file=sys.stderr)
             return 1
 
     print("Synthetic release-jar verifier checks passed.")

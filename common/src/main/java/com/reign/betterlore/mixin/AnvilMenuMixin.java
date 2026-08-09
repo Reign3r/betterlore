@@ -114,7 +114,7 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 			ClientboundAnvilLoreStatePayload payload = new ClientboundAnvilLoreStatePayload(
 					menu.containerId,
 					betterLore$sessionId,
-					LoreMarkupDecompiler.toSafeLoreMarkup(currentLeft),
+					LoreMarkupDecompiler.toSafeOwnedLoreMarkup(currentLeft),
 					LoreMarkupDecompiler.toSafeNameMarkup(currentLeft),
 					BetterLoreConfig.loreEditLevelCost()
 			);
@@ -127,11 +127,12 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 
 	@Inject(method = "createResult", at = @At("TAIL"))
 	private void betterLore$applyTextResult(CallbackInfo ci) {
+		AnvilMenu menu = (AnvilMenu) (Object) this;
 		if (!betterLore$hasClientLoreEdit && !betterLore$hasClientNameEdit) {
+			betterLore$normalizeOwnedResultSlot(menu);
 			return;
 		}
 
-		AnvilMenu menu = (AnvilMenu) (Object) this;
 		ItemStack left = menu.getSlot(0).getItem();
 		if (left.isEmpty()) {
 			return;
@@ -140,7 +141,7 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 		ItemStack right = menu.getSlot(1).getItem();
 		ItemStack vanillaOutput = menu.getSlot(2).getItem();
 		boolean loreChanged = betterLore$hasClientLoreEdit && !LoreComponents.equivalentToExistingLore(
-				left.get(DataComponents.LORE),
+				left,
 				betterLore$loreDocument
 		);
 		boolean nameChanged = betterLore$hasClientNameEdit && !LoreComponents.equivalentToExistingName(
@@ -163,6 +164,7 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 
 		switch (plan.outcome()) {
 			case PASS_THROUGH -> {
+				betterLore$normalizeOwnedResultSlot(menu);
 				return;
 			}
 			case INVALID, CLEAR_OUTPUT -> {
@@ -173,18 +175,39 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 			}
 			case APPLY -> {
 				ItemStack output = plan.copyLeftAsOutput() ? left.copy() : vanillaOutput.copy();
+				if (plan.applyLore() && !LoreComponents.canApplyTo(output, betterLore$loreDocument)) {
+					menu.getSlot(2).set(ItemStack.EMPTY);
+					cost.set(0);
+					menu.broadcastChanges();
+					return;
+				}
 				if (plan.applyName()) {
 					LoreComponents.applyNameTo(output, betterLore$rawNameMarkup, betterLore$nameDocument);
 				}
 				if (plan.applyLore()) {
 					LoreComponents.applyTo(output, betterLore$rawLoreMarkup, betterLore$loreDocument);
 				}
+				LoreComponents.normalizeOwnershipLayout(output);
 				cost.set(plan.finalCost());
 				betterLore$allowFreeResult = plan.finalCost() == 0;
 				menu.getSlot(2).set(output);
 				menu.broadcastChanges();
 			}
 		}
+	}
+
+	@Unique
+	private void betterLore$normalizeOwnedResultSlot(AnvilMenu menu) {
+		ItemStack output = menu.getSlot(2).getItem();
+		if (!output.isEmpty() && LoreComponents.normalizeOwnershipLayout(output)) {
+			menu.getSlot(2).set(output);
+			menu.broadcastChanges();
+		}
+	}
+
+	@Override
+	public int betterLore$getSessionId() {
+		return betterLore$sessionId;
 	}
 
 	@Override
@@ -194,11 +217,54 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 
 	@Override
 	public void betterLore$handleClientLoreUpdate(int sessionId, String rawLoreMarkup) {
-		AnvilMenu menu = (AnvilMenu) (Object) this;
-		if (sessionId != betterLore$sessionId || menu.getSlot(0).getItem().isEmpty()) {
+		if (!betterLore$canHandleTextUpdate(sessionId)) {
 			return;
 		}
 
+		betterLore$updateLoreState(rawLoreMarkup);
+		createResult();
+	}
+
+	@Override
+	public void betterLore$handleClientNameUpdate(int sessionId, String rawNameMarkup) {
+		if (!betterLore$canHandleTextUpdate(sessionId)) {
+			return;
+		}
+
+		betterLore$updateNameState(rawNameMarkup);
+		createResult();
+	}
+
+	@Override
+	public boolean betterLore$handleServerDraft(
+			int sessionId,
+			boolean nameEdited,
+			String rawNameMarkup,
+			boolean loreEdited,
+			String rawLoreMarkup
+	) {
+		if ((!nameEdited && !loreEdited) || !betterLore$canHandleTextUpdate(sessionId)) {
+			return false;
+		}
+
+		if (nameEdited) {
+			betterLore$updateNameState(rawNameMarkup);
+		}
+		if (loreEdited) {
+			betterLore$updateLoreState(rawLoreMarkup);
+		}
+		createResult();
+		return true;
+	}
+
+	@Unique
+	private boolean betterLore$canHandleTextUpdate(int sessionId) {
+		AnvilMenu menu = (AnvilMenu) (Object) this;
+		return sessionId == betterLore$sessionId && !menu.getSlot(0).getItem().isEmpty();
+	}
+
+	@Unique
+	private void betterLore$updateLoreState(String rawLoreMarkup) {
 		String raw = rawLoreMarkup == null ? "" : rawLoreMarkup;
 		ParseResult result = LoreMarkupParser.parse(raw);
 		if (result.isSuccess()) {
@@ -208,16 +274,10 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 		betterLore$lastLoreParseValid = result.isSuccess();
 		betterLore$rawLoreMarkup = raw;
 		betterLore$loreDocument = result.isSuccess() ? result.document() : LoreDocument.empty();
-		createResult();
 	}
 
-	@Override
-	public void betterLore$handleClientNameUpdate(int sessionId, String rawNameMarkup) {
-		AnvilMenu menu = (AnvilMenu) (Object) this;
-		if (sessionId != betterLore$sessionId || menu.getSlot(0).getItem().isEmpty()) {
-			return;
-		}
-
+	@Unique
+	private void betterLore$updateNameState(String rawNameMarkup) {
 		String raw = rawNameMarkup == null ? "" : rawNameMarkup;
 		ParseResult result = LoreMarkupParser.parseName(raw);
 		if (result.isSuccess()) {
@@ -227,7 +287,6 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 		betterLore$lastNameParseValid = result.isSuccess();
 		betterLore$rawNameMarkup = raw;
 		betterLore$nameDocument = result.isSuccess() ? result.document() : LoreDocument.empty();
-		createResult();
 	}
 
 	@Inject(method = "mayPickup", at = @At("HEAD"), cancellable = true)

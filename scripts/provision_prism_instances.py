@@ -59,6 +59,13 @@ def read_properties(path: Path) -> dict[str, str]:
     return properties
 
 
+def project_mod_version() -> str:
+    version = read_properties(ROOT / "gradle.properties").get("mod.version", "").strip()
+    if not version:
+        raise ProvisionError(f"{ROOT / 'gradle.properties'}: missing mod.version")
+    return version
+
+
 def single_file(paths: list[Path], label: str) -> Path:
     files = sorted(path for path in paths if path.is_file())
     if len(files) != 1:
@@ -429,6 +436,7 @@ def provision(instances_root: Path, gradle_cache_root: Path) -> tuple[int, list[
     if not instances_root.is_dir():
         raise ProvisionError(f"missing Prism instances directory: {instances_root}")
     release_targets = release_target_index(release)
+    mod_version = project_mod_version()
 
     jei_count = 0
     jei_gaps: list[str] = []
@@ -449,7 +457,7 @@ def provision(instances_root: Path, gradle_cache_root: Path) -> tuple[int, list[
 
         expected_mods: list[tuple[Path, str]] = [(better_lore, better_lore.name)]
         notes = [
-            "Better Lore 1.2.0 test instance",
+            f"Better Lore {mod_version} test instance",
             f"Minecraft: {minecraft}",
             f"Loader: {display_loader} {resolved_loader_version}",
             f"Compatibility artifact: {better_lore.name}",

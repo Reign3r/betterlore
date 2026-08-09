@@ -1,10 +1,16 @@
+import java.util.Properties
+
 plugins {
     java
     id("net.neoforged.gradle.userdev") version "7.0.192"
 }
 
 group = "com.reign"
-version = "1.2.0"
+val rootProperties = Properties().apply {
+    file("../../gradle.properties").inputStream().use { load(it) }
+}
+version = rootProperties.getProperty("mod.version")
+    ?: error("../../gradle.properties must declare mod.version")
 base.archivesName.set("better-lore-neoforge-1.20.5")
 
 // NeoGradle's generated NeoForm task paths are long. Keeping these ephemeral
