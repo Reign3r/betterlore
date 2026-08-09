@@ -11,7 +11,11 @@ import net.minecraft.world.item.ItemStack;
 public interface ModDataComponentsBackend {
 	String getString(ItemStack stack, String rootKey, String key);
 
+	int getInt(ItemStack stack, String rootKey, String key, int fallback);
+
 	void setString(ItemStack stack, String rootKey, String key, String value);
+
+	void setInt(ItemStack stack, String rootKey, String key, int value);
 
 	void removeString(ItemStack stack, String rootKey, String key);
 }

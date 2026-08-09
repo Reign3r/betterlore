@@ -9,6 +9,10 @@ public final class ModDataComponents {
 			"com.reign.betterlore.compat.data.ModDataComponentsBackendImpl";
 	private static final String ROOT_KEY = AnvilLoreMod.MOD_ID;
 	private static final String RAW_LORE_MARKUP_KEY = "raw_lore_markup";
+	private static final String OWNED_LORE_VERSION_KEY = "owned_lore_version";
+	private static final int OWNED_LORE_VERSION = 1;
+	private static final String LEGACY_SERVER_API_OWNED_LORE_VERSION_KEY = "server_api_owned_lore_version";
+	private static final String LEGACY_SERVER_API_OWNED_LORE_VERSION = "1";
 	private static final String RAW_NAME_MARKUP_KEY = "raw_name_markup";
 
 	private ModDataComponents() {
@@ -30,8 +34,40 @@ public final class ModDataComponents {
 		setString(stack, RAW_LORE_MARKUP_KEY, rawMarkup);
 	}
 
+	/** Marks source owned by Better Lore without registering a client-visible component type. */
+	public static void setOwnedLoreMarkup(ItemStack stack, String rawMarkup) {
+		if (rawMarkup == null || rawMarkup.isEmpty()) {
+			removeRawLoreMarkup(stack);
+			return;
+		}
+		setString(stack, RAW_LORE_MARKUP_KEY, rawMarkup);
+		backend().setInt(stack, ROOT_KEY, OWNED_LORE_VERSION_KEY, OWNED_LORE_VERSION);
+		removeString(stack, LEGACY_SERVER_API_OWNED_LORE_VERSION_KEY);
+	}
+
+	public static boolean hasCurrentLoreOwnership(ItemStack stack) {
+		return backend().getInt(stack, ROOT_KEY, OWNED_LORE_VERSION_KEY, 0) == OWNED_LORE_VERSION
+				|| LEGACY_SERVER_API_OWNED_LORE_VERSION.equals(
+						getString(stack, LEGACY_SERVER_API_OWNED_LORE_VERSION_KEY)
+				);
+	}
+
+	/** Compatibility alias for integrations compiled against the earlier server-API preview. */
+	@Deprecated(forRemoval = false)
+	public static void setServerApiOwnedLoreMarkup(ItemStack stack, String rawMarkup) {
+		setOwnedLoreMarkup(stack, rawMarkup);
+	}
+
+	/** Compatibility alias for integrations compiled against the earlier server-API preview. */
+	@Deprecated(forRemoval = false)
+	public static boolean hasCurrentServerApiLoreOwnership(ItemStack stack) {
+		return hasCurrentLoreOwnership(stack);
+	}
+
 	public static void removeRawLoreMarkup(ItemStack stack) {
 		removeString(stack, RAW_LORE_MARKUP_KEY);
+		removeString(stack, OWNED_LORE_VERSION_KEY);
+		removeString(stack, LEGACY_SERVER_API_OWNED_LORE_VERSION_KEY);
 	}
 
 	public static String getRawNameMarkup(ItemStack stack) {

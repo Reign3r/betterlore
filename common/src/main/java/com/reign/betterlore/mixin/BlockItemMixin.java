@@ -29,6 +29,12 @@ public abstract class BlockItemMixin {
 			return;
 		}
 
-		PlacedItemTextStorage.remember(context.getLevel(), context.getClickedPos(), placedStack);
+		PlacedItemTextStorage.remember(
+				context.getLevel(),
+				context.getClickedPos(),
+				PlacedItemTextStorage.shouldRememberPlacement(placedStack)
+						? placedStack
+						: ItemStack.EMPTY
+		);
 	}
 }

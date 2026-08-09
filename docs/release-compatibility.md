@@ -1,11 +1,11 @@
 # Release compatibility
 
-Better Lore keeps exact compilation and test coverage for every supported Minecraft/loader pair while minimizing the files users and testers need to handle.
+Better Lore keeps exact compilation and test coverage for every supported Minecraft/loader pair while maintaining only the range artifacts users install.
 
 ## Published shape
 
-The 52 compile targets are represented by five external jars while the proven
-binary implementation families remain explicit:
+Since 1.2.0, the 52 compile targets are represented by five maintained and
+published jars while the proven binary implementation families remain explicit:
 
 | Loader | Public files | Public groups | Retained binary families |
 | --- | ---: | --- | ---: |
@@ -17,6 +17,8 @@ Fabric Loader resolves exactly one nested `better_lore_impl` candidate for the r
 
 The canonical partition is `scripts/release_matrix.py`. Collection, verification, Prism deployment, and launch-smoke coverage all read that same model or its generated manifest.
 
+Only the range artifacts returned by `published_artifacts()` are release products and maintained deployment units. The 52 exact Minecraft/loader jars are regenerated as disposable inputs for collection and validation; they are never independently published or maintained as individual releases or deployments. The public artifact count may grow in the future only when an actual loader, metadata, resource, or binary-compatibility boundary prevents an existing range from remaining truthful. This artifact policy does not reduce exact-target compilation, verification, or launch evidence.
+
 ## Safety checks
 
 `collect_release_jars.py` still inspects all 52 exact build outputs. The existing 12 Fabric, 13 NeoForge, and 10 Forge binary families remain the implementation-selection boundaries. Fabric retains one exact implementation per nested candidate. Forge and NeoForge keep byte-identical classes shared and relocate only version-sensitive classes plus their descriptor-level dependants into generated family namespaces. A tiny runtime selector loads one family; inactive generated classes are never initialized.
@@ -24,6 +26,7 @@ The canonical partition is `scripts/release_matrix.py`. Collection, verification
 The collector also:
 
 - generates one public Fabric container with range-specific nested candidates;
+- starting in 1.3.0, keeps the public `com.reign.betterlore.api.server` contract byte-stable and unrelocated in every selected implementation;
 - preserves package access and payload signatures while relocating flat-adapter classes;
 - selects the active JEI identifier signature before JEI reflects its plugin;
 - writes exact-version Maven unions for Forge and NeoForge;
@@ -32,7 +35,7 @@ The collector also:
 - publishes through atomic file replacement on Windows so rebuilding cannot mutate hardlinked jars in Prism instances;
 - excludes high-resolution repository artwork that is not used at runtime.
 
-`verify_release_jars.py` recursively checks the Fabric bundle, flat-adapter descriptors, mapping namespaces, mixins, services, pack formats, source hashes, target coverage, stale files, publication strategies, and size budgets. Pack metadata is emitted on the correct side of Minecraft's format-65 boundary: older groups receive `supported_formats`, while newer groups omit the now-forbidden legacy key.
+`verify_release_jars.py` recursively checks the Fabric bundle, flat-adapter descriptors, mapping namespaces, mixins, services, pack formats, source hashes, target coverage, stale files, publication strategies, public server-API ABI, and size budgets. Pack metadata is emitted on the correct side of Minecraft's format-65 boundary: older groups receive `supported_formats`, while newer groups omit the now-forbidden legacy key.
 
 ## Commands
 

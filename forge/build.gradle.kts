@@ -111,8 +111,13 @@ sourceSets.test {
 }
 
 tasks.named<JavaCompile>("compileJava") {
-    dependsOn(prepareSharedJava, prepareLoaderJava)
-    setSource(files(prepareSharedJava, prepareLoaderJava))
+	dependsOn(prepareSharedJava, prepareLoaderJava)
+	setSource(files(prepareSharedJava, prepareLoaderJava))
+	// ForgeGradle 7 deliberately combines compiled classes and processed
+	// resources in build/sourceSets/main. On a clean build ProcessResources
+	// synchronizes that directory, so it must finish before javac adds classes;
+	// the opposite order leaves a resource-only jar and an empty test classpath.
+	mustRunAfter(tasks.named("processResources"))
 }
 
 tasks.named("compileTestJava") {

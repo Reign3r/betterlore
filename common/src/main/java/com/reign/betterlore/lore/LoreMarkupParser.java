@@ -7,7 +7,7 @@ import java.util.Locale;
 public final class LoreMarkupParser {
 	public static final int MAX_VISIBLE_CODEPOINTS = 255;
 	public static final int MAX_RAW_CHARS = 4096;
-	public static final int MAX_COLOR_TAGS = 64;
+	public static final int MAX_COLOR_TAGS = 256;
 	public static final int MAX_LINES = 16;
 	public static final int DEFAULT_COLOR = 0xAAAAAA;
 	public static final int WRAP_VISIBLE_CHARS = 42;

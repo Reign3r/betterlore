@@ -5,6 +5,8 @@ import com.reign.betterlore.access.AnvilLoreMenuBridge;
 import com.reign.betterlore.access.RecipeViewerArea;
 import com.reign.betterlore.client.ColorValueSlider;
 import com.reign.betterlore.client.ColorWheelWidget;
+import com.reign.betterlore.client.RandomColor;
+import com.reign.betterlore.client.TooltipPositioning;
 import com.reign.betterlore.lore.LoreComponents;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
@@ -127,6 +129,8 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	private Button betterLore$toggleButton;
 	@Unique
 	private Button betterLore$helpButton;
+	@Unique
+	private Button betterLore$randomColorButton;
 	@Unique
 	private Button betterLore$closeButton;
 	@Unique
@@ -267,10 +271,17 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		betterLore$helpButton = Button.builder(Component.literal("?"), button -> {})
 				.bounds(0, 0, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE)
 				.build();
+		betterLore$randomColorButton = Button.builder(
+				Component.literal("⚄"),
+				button -> betterLore$setActiveColor(RandomColor.nextRgb())
+		)
+				.bounds(0, 0, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE)
+				.build();
 		betterLore$closeButton = Button.builder(Component.literal("×"), button -> betterLore$setPanelOpen(false))
 				.bounds(0, 0, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE)
 				.build();
 		addRenderableWidget(betterLore$toggleButton);
+		addRenderableWidget(betterLore$randomColorButton);
 		addRenderableWidget(betterLore$helpButton);
 		addRenderableWidget(betterLore$closeButton);
 
@@ -389,9 +400,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	@Inject(method = "extractBackground", at = @At("TAIL"))
 	private void betterLore$extractLorePanel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		betterLore$drawLorePanel(graphics::fill, (text, x, y, color) -> graphics.text(font, text, x, y, color, false));
-		if (betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
-			int tooltipX = Math.min(mouseX, Math.max(0, width - 340));
-			graphics.setComponentTooltipForNextFrame(font, betterLore$helpTooltipLines(), tooltipX, mouseY);
+		List<Component> tooltip = betterLore$tooltipLinesAt(mouseX, mouseY);
+		if (!tooltip.isEmpty()) {
+			int tooltipX = betterLore$tooltipAnchorX(mouseX, mouseY);
+			graphics.setComponentTooltipForNextFrame(font, tooltip, tooltipX, mouseY);
 		}
 	}
 	//? } else {
@@ -406,12 +418,13 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		//? if >=26.1 {
 		return;
 		//? } else if >=1.21.6 {
-		if (!betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
+		List<Component> tooltip = betterLore$tooltipLinesAt(mouseX, mouseY);
+		if (tooltip.isEmpty()) {
 			return;
 		}
 		GuiGraphics graphics = (GuiGraphics) graphicsObject;
-		int tooltipX = Math.min(mouseX, Math.max(0, width - 340));
-		graphics.setComponentTooltipForNextFrame(font, betterLore$helpTooltipLines(), tooltipX, mouseY);
+		int tooltipX = betterLore$tooltipAnchorX(mouseX, mouseY);
+		graphics.setComponentTooltipForNextFrame(font, tooltip, tooltipX, mouseY);
 		//? } else {
 		GuiGraphics graphics = (GuiGraphics) graphicsObject;
 		//? if <1.21.6 {
@@ -419,11 +432,12 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			betterLore$colorWheelWidget.renderLateOverlay(graphics);
 		}
 		//? }
-		if (!betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
+		List<Component> tooltip = betterLore$tooltipLinesAt(mouseX, mouseY);
+		if (tooltip.isEmpty()) {
 			return;
 		}
-		int tooltipX = Math.min(mouseX, Math.max(0, width - 340));
-		graphics.renderComponentTooltip(font, betterLore$helpTooltipLines(), tooltipX, mouseY);
+		int tooltipX = betterLore$tooltipAnchorX(mouseX, mouseY);
+		graphics.renderComponentTooltip(font, tooltip, tooltipX, mouseY);
 		//? }
 	}
 
@@ -449,8 +463,11 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		);
 		int countColor = betterLore$parseResult.isSuccess() ? betterLore$VANILLA_TEXT_MUTED : betterLore$VANILLA_TEXT_ERROR;
 		int countX = textX + font.width(title) + 10;
-		if (betterLore$helpButton != null) {
-			int maxCountX = betterLore$helpButton.getX() - 4 - font.width(count);
+		Button leftmostTopButton = betterLore$randomColorButton != null
+				? betterLore$randomColorButton
+				: betterLore$helpButton;
+		if (leftmostTopButton != null) {
+			int maxCountX = leftmostTopButton.getX() - 4 - font.width(count);
 			countX = Math.min(countX, Math.max(textX, maxCountX));
 		}
 		text.draw(count, countX, titleY, countColor);
@@ -565,6 +582,39 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 				&& betterLore$helpButton != null
 				&& betterLore$helpButton.visible
 				&& betterLore$isInWidgetBounds(mouseX, mouseY, betterLore$helpButton);
+	}
+
+	@Unique
+	private boolean betterLore$shouldShowRandomColorTooltip(double mouseX, double mouseY) {
+		return betterLore$panelOpen
+				&& betterLore$randomColorButton != null
+				&& betterLore$randomColorButton.visible
+				&& betterLore$isInWidgetBounds(mouseX, mouseY, betterLore$randomColorButton);
+	}
+
+	@Unique
+	private int betterLore$tooltipAnchorX(double mouseX, double mouseY) {
+		if (betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
+			return TooltipPositioning.anchorX((int) mouseX, width, true);
+		}
+		if (betterLore$shouldShowRandomColorTooltip(mouseX, mouseY)) {
+			return TooltipPositioning.buttonAnchorX(
+					betterLore$randomColorButton.getX(),
+					betterLore$randomColorButton.getWidth()
+			);
+		}
+		return (int) mouseX;
+	}
+
+	@Unique
+	private List<Component> betterLore$tooltipLinesAt(double mouseX, double mouseY) {
+		if (betterLore$shouldShowHelpTooltip(mouseX, mouseY)) {
+			return betterLore$helpTooltipLines();
+		}
+		if (betterLore$shouldShowRandomColorTooltip(mouseX, mouseY)) {
+			return List.of(Component.translatable("gui.better_lore.random_color"));
+		}
+		return List.of();
 	}
 
 	//? if >=1.21.9 {
@@ -1136,6 +1186,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		int topButtonY = betterLore$panelY + 5;
 		betterLore$positionWidget(betterLore$closeButton, betterLore$panelX + betterLore$panelWidth - betterLore$PANEL_PADDING - betterLore$SMALL_BUTTON_SIZE, topButtonY, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE);
 		betterLore$positionWidget(betterLore$helpButton, betterLore$closeButton.getX() - betterLore$SMALL_BUTTON_SIZE - 3, topButtonY, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE);
+		betterLore$positionWidget(betterLore$randomColorButton, betterLore$helpButton.getX() - betterLore$SMALL_BUTTON_SIZE - 3, topButtonY, betterLore$SMALL_BUTTON_SIZE, betterLore$SMALL_BUTTON_SIZE);
 
 		int colorTitleY = editorY + editorHeight + 5;
 		int hexInputWidth = 55;
@@ -1286,6 +1337,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		betterLore$setWidgetVisible(betterLore$helpButton, visible);
+		betterLore$setWidgetVisible(betterLore$randomColorButton, visible);
 		betterLore$setWidgetVisible(betterLore$closeButton, visible);
 		betterLore$setWidgetVisible(betterLore$redDownButton, visible);
 		betterLore$setWidgetVisible(betterLore$redUpButton, visible);

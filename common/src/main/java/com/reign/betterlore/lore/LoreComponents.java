@@ -13,26 +13,33 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class LoreComponents {
+	public static final int MAX_VISIBLE_LORE_LINES = ItemLore.MAX_LINES;
+
 	private LoreComponents() {
 	}
 
 	public static void applyTo(ItemStack stack, LoreDocument document) {
-		applyTo(stack, null, document);
+		applyTo(stack, serializeDocument(document), document);
 	}
 
 	public static void applyTo(ItemStack stack, String rawMarkup, LoreDocument document) {
-		List<Component> components = toComponents(document);
+		List<Component> replacement = toComponents(document);
+		List<Component> combined = planVisibleLore(
+				visibleComponents(stack),
+				legacyOwnedComponents(stack),
+				replacement
+		);
+		setVisibleLore(stack, combined);
 
-		if (components.isEmpty()) {
-			stack.remove(DataComponents.LORE);
+		if (replacement.isEmpty()) {
 			ModDataComponents.removeRawLoreMarkup(stack);
 			return;
 		}
 
-		stack.set(DataComponents.LORE, new ItemLore(components));
-		if (rawMarkup != null) {
-			ModDataComponents.setRawLoreMarkup(stack, rawMarkup);
-		}
+		String source = rawMarkup == null || rawMarkup.isEmpty()
+				? serializeDocument(document)
+				: rawMarkup;
+		ModDataComponents.setOwnedLoreMarkup(stack, source);
 	}
 
 	public static void applyNameTo(ItemStack stack, String rawMarkup, LoreDocument document) {
@@ -48,9 +55,8 @@ public final class LoreComponents {
 		}
 	}
 
-	public static boolean equivalentToExistingLore(ItemLore existingLore, LoreDocument document) {
-		List<Component> existing = existingLore == null ? List.of() : existingLore.lines();
-		return existing.equals(toComponents(document));
+	public static boolean equivalentToExistingLore(ItemStack stack, LoreDocument document) {
+		return ownedComponents(stack).equals(toComponents(document));
 	}
 
 	public static boolean equivalentToExistingName(Component existingName, LoreDocument document) {
@@ -77,6 +83,103 @@ public final class LoreComponents {
 			firstLine = false;
 		}
 		return root;
+	}
+
+	public static List<Component> ownedComponents(ItemStack stack) {
+		return LoreOwnership.ownedLines(visibleComponents(stack), legacyOwnedComponents(stack));
+	}
+
+	public static List<Component> foreignComponents(ItemStack stack) {
+		return LoreOwnership.foreignLines(visibleComponents(stack), legacyOwnedComponents(stack));
+	}
+
+	public static boolean canApplyTo(ItemStack stack, LoreDocument document) {
+		return combinedComponents(stack, toComponents(document)).size() <= MAX_VISIBLE_LORE_LINES;
+	}
+
+	public static int combinedVisibleLineCount(ItemStack stack, LoreDocument document) {
+		return combinedComponents(stack, toComponents(document)).size();
+	}
+
+	/** Moves an existing marked section below foreign lore without changing either section. */
+	public static boolean normalizeOwnershipLayout(ItemStack stack) {
+		List<Component> visible = visibleComponents(stack);
+		boolean hasInlineOwnership = LoreOwnership.hasInlineOwnership(visible);
+		if (!hasInlineOwnership) {
+			return false;
+		}
+
+		List<Component> normalized = combinedComponents(stack, ownedComponents(stack));
+		if (visible.equals(normalized) || normalized.size() > MAX_VISIBLE_LORE_LINES) {
+			return false;
+		}
+
+		String rawMarkup = LoreMarkupDecompiler.toSafeOwnedLoreMarkup(stack);
+		ParseResult parsed = LoreMarkupParser.parse(rawMarkup);
+		if (!parsed.isSuccess()) {
+			return false;
+		}
+		applyTo(stack, rawMarkup, parsed.document());
+		return true;
+	}
+
+	private static List<Component> combinedComponents(ItemStack stack, List<Component> replacement) {
+		return LoreOwnership.compose(
+				visibleComponents(stack),
+				legacyOwnedComponents(stack),
+				replacement
+		);
+	}
+
+	/** Pure application plan shared by unit tests and the ItemStack adapter. */
+	static List<Component> planVisibleLore(
+			List<Component> visible,
+			List<Component> legacyOwned,
+			List<Component> replacement
+	) {
+		List<Component> combined = LoreOwnership.compose(visible, legacyOwned, replacement);
+		if (combined.size() > MAX_VISIBLE_LORE_LINES) {
+			throw new IllegalArgumentException(
+					"Combined lore exceeds " + MAX_VISIBLE_LORE_LINES + " visible lines."
+			);
+		}
+		return combined;
+	}
+
+	private static List<Component> visibleComponents(ItemStack stack) {
+		ItemLore lore = stack.get(DataComponents.LORE);
+		return lore == null ? List.of() : lore.lines();
+	}
+
+	private static List<Component> legacyOwnedComponents(ItemStack stack) {
+		if (ModDataComponents.hasCurrentLoreOwnership(stack)) {
+			return List.of();
+		}
+		String rawMarkup = ModDataComponents.getRawLoreMarkup(stack);
+		if (rawMarkup == null || rawMarkup.isEmpty()) {
+			return List.of();
+		}
+		ParseResult parsed = LoreMarkupParser.parse(rawMarkup);
+		return parsed.isSuccess() ? toComponents(parsed.document()) : List.of();
+	}
+
+	private static String serializeDocument(LoreDocument document) {
+		StringBuilder markup = new StringBuilder();
+		for (LoreLine line : document.lines()) {
+			if (!markup.isEmpty()) {
+				markup.append('\n');
+			}
+			markup.append(LoreMarkupDecompiler.toSafeLineMarkup(line));
+		}
+		return markup.toString();
+	}
+
+	private static void setVisibleLore(ItemStack stack, List<Component> lines) {
+		if (lines.isEmpty()) {
+			stack.remove(DataComponents.LORE);
+		} else {
+			stack.set(DataComponents.LORE, new ItemLore(lines));
+		}
 	}
 
 	private static Component nameLineToComponent(LoreLine line) {

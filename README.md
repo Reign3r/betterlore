@@ -44,6 +44,12 @@ Better Lore adds a survival-friendly extension to the anvil. You can now create 
 - Color and format item names.
 - Add multiline, colored, formatted lore.
 - Pick colors with RGB sliders, direct hex input, or a color wheel.
+- Randomize the currently selected color with the dice button.
+- Keep Better Lore entries separate from other mods' lore; only Better Lore-owned lines are editable here.
+- Preserve exact Better Lore name markup and all lore when boats, minecarts, armor stands, or bucketable mobs make an item/entity/item round trip.
+- Keep Better Lore text on water, lava, milk, and powder-snow buckets while they are emptied/refilled; mob buckets show the contained mob's text while privately retaining the bucket's own text for release.
+- Preserve exact Better Lore names and lore when copper golems become statues and later awaken or drop again.
+- Keep placed Better Lore text attached to dragon eggs when they teleport.
 - Lore changes add one extra level to the anvil cost (will be configurable in the future).
 - Layout compatibility with JEI and REI.
 
@@ -89,9 +95,11 @@ Tags used:
 
 Fabric API and Text Placeholder API are required dependencies. Install them alongside Better Lore.
 
-### Development releases
+### Compatibility releases
 
-The project compiles all 52 supported loader/version targets, then publishes five compatibility artifacts instead of one jar per target. See [release compatibility](docs/release-compatibility.md) for the public-group layout, retained binary-family checks, and Prism smoke-test workflow.
+Since 1.2.0, Better Lore maintains and publishes only the range compatibility artifacts defined by the release matrix—currently five files, rather than one file per exact loader/version target. The 52 exact-target jars are disposable internal build and test inputs used to prove the ranges; they are not separate releases or maintained deployments. A future public artifact is added only when a real loader or binary-compatibility boundary requires one. See [release compatibility](docs/release-compatibility.md) for the public groups, retained binary-family checks, and Prism smoke-test workflow.
+
+Starting with 1.3.0, server-side companion mods can integrate without copying Better Lore internals through the versioned [server API](docs/server-api.md). API v1 is included in every selected implementation represented by the five compatibility artifacts and does not add a client requirement.
 
 ### Client and server behavior
 

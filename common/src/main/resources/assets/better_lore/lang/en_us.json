@@ -8,6 +8,7 @@
   "gui.better_lore.color_preview": "Minecraft",
   "gui.better_lore.hex_input": "Hex color",
   "gui.better_lore.color_wheel": "Color wheel",
+  "gui.better_lore.random_color": "Randomize selected color",
   "gui.better_lore.copy_hex": "Copy %s",
   "gui.better_lore.insert_color": "Insert color",
   "gui.better_lore.insert_gradient": "Insert gradient",
