@@ -24,6 +24,13 @@ public final class EditorMarkup {
 		if (!commit(project(new State(source, List.of())))) commit(new State(source, List.of()));
 	}
 
+	/** Returns the text that the vanilla name field displays for stored markup. */
+	public static String visibleText(String stored) {
+		EditorMarkup editor = new EditorMarkup();
+		editor.load(stored);
+		return editor.text();
+	}
+
 	public String text() { return state.text(); }
 	public String raw() { return raw; }
 

@@ -219,6 +219,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	private int betterLore$nameSendDelay = 0;
 	@Unique
 	private int betterLore$nameStateGraceTicks = 0;
+	@Unique
+	private boolean betterLore$nameStateInitialized = false;
+	@Unique
+	private boolean betterLore$nameUserInputPending = false;
 
 	//? if >=1.21.11 {
 	private AnvilScreenMixin(AnvilMenu menu, Inventory inventory, Component title, Identifier menuResource) {
@@ -502,9 +506,11 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			return;
 		}
 
-		String rawName = betterLore$limitRawInput(name.getValue());
-		betterLore$nameMarkup.edit(rawName);
-		ParseResult parsedName = LoreMarkupParser.parseName(betterLore$nameMarkup.raw());
+		String rawName = betterLore$nameStateInitialized
+				? betterLore$nameMarkup.text()
+				: betterLore$limitRawInput(name.getValue());
+		String source = betterLore$nameStateInitialized ? betterLore$nameMarkup.raw() : rawName;
+		ParseResult parsedName = LoreMarkupParser.parseName(source);
 		Component preview = parsedName.isSuccess()
 				? LoreComponents.toNameComponent(parsedName.document())
 				: Component.literal(rawName).withStyle(Style.EMPTY.withColor(0xFF5555));
@@ -627,6 +633,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void betterLore$routeKeysToLoreEditor(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (name != null && name.isFocused()) {
+			betterLore$nameUserInputPending = true;
+		}
+
 		if (betterLore$hexInput != null && betterLore$hexInput.visible && betterLore$hexInput.isFocused() && betterLore$hexInput.keyPressed(event)) {
 			cir.setReturnValue(true);
 			return;
@@ -644,6 +654,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 	@Override
 	public boolean charTyped(CharacterEvent event) {
+		if (name != null && name.isFocused()) {
+			betterLore$nameUserInputPending = true;
+		}
+
 		if (betterLore$hexInput != null && betterLore$hexInput.visible && betterLore$hexInput.isFocused() && betterLore$hexInput.charTyped(event)) {
 			return true;
 		}
@@ -761,6 +775,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	//? } else {
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void betterLore$routeKeysToLoreEditor(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
+		if (name != null && name.isFocused()) {
+			betterLore$nameUserInputPending = true;
+		}
+
 		if (betterLore$hexInput != null && betterLore$hexInput.visible && betterLore$hexInput.isFocused()
 				&& betterLore$hexInput.keyPressed(keyCode, scanCode, modifiers)) {
 			cir.setReturnValue(true);
@@ -778,6 +796,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 
 	@Override
 	public boolean charTyped(char character, int modifiers) {
+		if (name != null && name.isFocused()) {
+			betterLore$nameUserInputPending = true;
+		}
+
 		if (betterLore$hexInput != null && betterLore$hexInput.visible && betterLore$hexInput.isFocused()
 				&& betterLore$hexInput.charTyped(character, modifiers)) {
 			return true;
@@ -1027,7 +1049,9 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		name.setX(leftPos + 62);
 		name.setY(topPos + 24);
 		name.setWidth(103);
-		betterLore$nameMarkup.edit(betterLore$limitRawInput(name.getValue()));
+		if (!betterLore$nameStateInitialized) {
+			betterLore$nameMarkup.load(betterLore$limitRawInput(name.getValue()));
+		}
 		betterLore$lastObservedName = betterLore$nameMarkup.raw();
 		betterLore$lastSentName = betterLore$lastObservedName;
 	}
@@ -1039,7 +1063,17 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		String input = betterLore$limitRawInput(name.getValue());
-		betterLore$nameMarkup.edit(input);
+		boolean userInput = betterLore$nameUserInputPending;
+		betterLore$nameUserInputPending = false;
+		if (userInput) {
+			betterLore$nameMarkup.edit(input);
+		} else if (betterLore$nameStateInitialized && !input.equals(betterLore$nameMarkup.text())) {
+			// Vanilla can echo its literal rename back into the shared EditBox.
+			// Do not interpret that synchronization as a user edit or discard the
+			// migrated gradient mode held by EditorMarkup.
+			betterLore$restoreProjectedName();
+			input = betterLore$nameMarkup.text();
+		}
 		String current = betterLore$nameMarkup.text();
 		String stored = betterLore$nameMarkup.raw();
 		if (!current.equals(name.getValue())) {
@@ -1084,6 +1118,8 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		betterLore$nameMarkup.load(betterLore$limitRawInput(rawNameMarkup == null ? "" : rawNameMarkup));
+		betterLore$nameStateInitialized = true;
+		betterLore$nameUserInputPending = false;
 		String safeRawName = betterLore$nameMarkup.text();
 		boolean forceCustomNameSync = false;
 		betterLore$suppressNameSync = true;
@@ -1100,6 +1136,26 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		betterLore$nameDirty = forceCustomNameSync;
 		betterLore$nameSendDelay = 0;
 		betterLore$nameStateGraceTicks = forceCustomNameSync ? 0 : 2;
+		betterLore$suppressNameSync = false;
+	}
+
+	@Unique
+	private void betterLore$restoreProjectedName() {
+		if (name == null) {
+			return;
+		}
+
+		String projected = betterLore$nameMarkup.text();
+		if (projected.equals(name.getValue())) {
+			return;
+		}
+
+		int cursor = Math.min(name.getCursorPosition(), projected.length());
+		int anchor = Math.min(((EditBoxAccessor) name).betterLore$getHighlightPos(), projected.length());
+		betterLore$suppressNameSync = true;
+		name.setValue(projected);
+		name.setCursorPosition(cursor);
+		name.setHighlightPos(anchor);
 		betterLore$suppressNameSync = false;
 	}
 

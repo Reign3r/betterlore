@@ -39,6 +39,12 @@ class EditorMarkupTest {
 	}
 
 	@Test
+	void vanillaEchoUsesTheProjectedTextOfMigratedMarkup() {
+		assertEquals(VISIBLE, EditorMarkup.visibleText(OLD));
+		assertEquals(VISIBLE, EditorMarkup.visibleText(VISIBLE));
+	}
+
+	@Test
 	void editingTextAndColorsRetainsTheOriginalGradientMode() {
 		EditorMarkup editor = load(OLD);
 		assertTrue(editor.edit(VISIBLE.replace("Titanfall", "Edited")));
