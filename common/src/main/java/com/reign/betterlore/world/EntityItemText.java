@@ -4,6 +4,7 @@ import com.reign.betterlore.AnvilLoreMod;
 import com.reign.betterlore.ModDataComponents;
 import com.reign.betterlore.access.EntityItemTextCarrier;
 import com.reign.betterlore.lore.LoreComponents;
+import com.reign.betterlore.lore.LoreMarkupDecompiler;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
 import com.reign.betterlore.world.compat.ComponentListNbtCodec;
@@ -61,7 +62,8 @@ public final class EntityItemText {
 		ItemStack retainedText = retainedTextStack(retainedCustomData, returnedStack);
 
 		String currentRawName = validRawNameMarkup(returnedStack);
-		String rawName = ModDataComponents.getRawNameMarkup(retainedText);
+		String rawName = LoreMarkupDecompiler.matchingStoredNameMarkup(
+				ModDataComponents.getRawNameMarkup(retainedText), currentEntityName);
 		if ((currentRawName == null || currentRawName.isEmpty())
 				&& rawName != null
 				&& !rawName.isEmpty()) {
@@ -147,22 +149,18 @@ public final class EntityItemText {
 		}
 
 		ItemStack retainedText = retainedTextStack(selected, stack);
-		String rawName = ModDataComponents.getRawNameMarkup(retainedText);
-		ParseResult parsedName = LoreMarkupParser.parseName(rawName);
-		if (!parsedName.isSuccess()
-				|| !LoreComponents.equivalentToExistingName(
-						stack.get(DataComponents.CUSTOM_NAME),
-						parsedName.document()
-				)) {
+		String rawName = validRawNameMarkup(stack);
+		if (rawName == null || rawName.isEmpty()) {
 			ModDataComponents.removeRawNameMarkup(retainedText);
+		} else {
+			ModDataComponents.setOwnedNameMarkup(retainedText, rawName);
 		}
 
-		String rawLore = ModDataComponents.getRawLoreMarkup(retainedText);
-		ParseResult parsedLore = LoreMarkupParser.parse(rawLore);
-		if (!ModDataComponents.hasCurrentLoreOwnership(stack)
-				|| !parsedLore.isSuccess()
-				|| !LoreComponents.equivalentToExistingLore(stack, parsedLore.document())) {
+		String rawLore = validOwnedLoreMarkup(stack);
+		if (rawLore.isEmpty()) {
 			ModDataComponents.removeRawLoreMarkup(retainedText);
+		} else {
+			ModDataComponents.setOwnedLoreMarkup(retainedText, rawLore);
 		}
 
 		String retainedName = ModDataComponents.getRawNameMarkup(retainedText);
@@ -255,22 +253,14 @@ public final class EntityItemText {
 	}
 
 	private static String validRawNameMarkup(ItemStack stack) {
-		String rawName = ModDataComponents.getRawNameMarkup(stack);
-		ParseResult parsed = LoreMarkupParser.parseName(rawName);
-		return parsed.isSuccess()
-				&& LoreComponents.equivalentToExistingName(
-						stack.get(DataComponents.CUSTOM_NAME),
-						parsed.document()
-				)
-				? rawName
-				: null;
+		return LoreMarkupDecompiler.matchingStoredNameMarkup(
+				ModDataComponents.getRawNameMarkup(stack), stack.get(DataComponents.CUSTOM_NAME));
 	}
 
 	private static String validOwnedLoreMarkup(ItemStack stack) {
-		String rawLore = ModDataComponents.getRawLoreMarkup(stack);
+		String rawLore = LoreMarkupDecompiler.toSafeOwnedLoreMarkup(stack);
 		ParseResult parsed = LoreMarkupParser.parse(rawLore);
-		return ModDataComponents.hasCurrentLoreOwnership(stack)
-				&& parsed.isSuccess()
+		return parsed.isSuccess()
 				&& LoreComponents.equivalentToExistingLore(stack, parsed.document())
 				? rawLore
 				: "";

@@ -2,6 +2,7 @@ package com.reign.betterlore.world;
 
 import com.reign.betterlore.ModDataComponents;
 import com.reign.betterlore.lore.LoreComponents;
+import com.reign.betterlore.lore.LegacyItemFixtures;
 import com.reign.betterlore.lore.LoreMarkupDecompiler;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
@@ -290,6 +291,35 @@ class EntityItemTextTest {
 
 	private static ItemStack styledItem(Item item) {
 		return styledItem(item, RAW_NAME, RAW_LORE, false);
+	}
+
+	@Test
+	void capturedLegacyItemsMigrateBeforeEntityAndBucketTransfers() {
+		for (LegacyItemFixtures.Item fixture : LegacyItemFixtures.items()) {
+			ItemStack original = new ItemStack(Items.MINECART);
+			original.set(DataComponents.LORE, new ItemLore(fixture.lore()));
+			if (fixture.name() != null) original.set(DataComponents.CUSTOM_NAME, fixture.name());
+			ModDataComponents.setRawNameMarkup(original, fixture.rawName());
+			if (fixture.currentOwnership()) ModDataComponents.setOwnedLoreMarkup(original, fixture.rawLore());
+			else ModDataComponents.setRawLoreMarkup(original, fixture.rawLore());
+			String expectedLore = LoreMarkupDecompiler.toSafeOwnedLoreMarkup(original);
+			String expectedName = LoreMarkupDecompiler.matchingStoredNameMarkup(fixture.rawName(), fixture.name());
+			CompoundTag retained = EntityItemText.itemTextDataFromStack(original, RegistryAccess.EMPTY);
+			assertFalse(retained.isEmpty(), fixture.label());
+			for (boolean bucket : new boolean[] {false, true}) {
+				ItemStack returned = new ItemStack(Items.MINECART);
+				if (bucket) {
+					EntityItemText.restoreStoredText(retained, returned, RegistryAccess.EMPTY);
+				} else {
+					if (fixture.name() != null) returned.set(DataComponents.CUSTOM_NAME, fixture.name());
+					EntityItemText.restoreOwnedText(fixture.name(), retained, returned, RegistryAccess.EMPTY);
+				}
+				assertEquals(expectedLore, LoreMarkupDecompiler.toSafeOwnedLoreMarkup(returned), fixture.label());
+				assertTrue(LoreComponents.equivalentToExistingLore(returned, LoreMarkupParser.parse(expectedLore).document()));
+				assertEquals(expectedName, ModDataComponents.getRawNameMarkup(returned), fixture.label());
+			}
+			assertEquals(fixture.lore(), original.get(DataComponents.LORE).lines());
+		}
 	}
 
 	private static ItemStack styledItem(

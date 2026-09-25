@@ -53,10 +53,6 @@ repositories {
     maven("https://maven.minecraftforge.net/")
     maven("https://maven.blamejared.com/")
     maven("https://maven.shedaniel.me/")
-    maven("https://maven.nucleoid.xyz/")
-    maven("https://api.modrinth.com/maven") {
-        content { includeGroup("maven.modrinth") }
-    }
 }
 
 dependencies {

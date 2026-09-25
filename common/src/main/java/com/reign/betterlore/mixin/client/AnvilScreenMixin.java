@@ -10,6 +10,7 @@ import com.reign.betterlore.client.TooltipPositioning;
 import com.reign.betterlore.lore.LoreComponents;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
+import com.reign.betterlore.lore.quicktext.EditorMarkup;
 import com.reign.betterlore.client.net.ClientAnvilLoreNetworking;
 import com.reign.betterlore.net.ServerboundAnvilLoreUpdatePayload;
 import com.reign.betterlore.net.ServerboundAnvilNameUpdatePayload;
@@ -166,6 +167,10 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 	private int betterLore$sessionId = 0;
 	@Unique
 	private String betterLore$raw = "";
+	@Unique
+	private final EditorMarkup betterLore$loreMarkup = new EditorMarkup();
+	@Unique
+	private final EditorMarkup betterLore$nameMarkup = new EditorMarkup();
 	@Unique
 	private ParseResult betterLore$parseResult = LoreMarkupParser.parse("");
 	@Unique
@@ -365,7 +370,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		betterLore$colorWheelWidget = new ColorWheelWidget(0, 0, betterLore$currentColor(), this::betterLore$setActiveColor);
 		addRenderableWidget(betterLore$colorWheelWidget);
 
-		betterLore$setEditorValue(betterLore$raw, false);
+		betterLore$setEditorValue(betterLore$loreMarkup.raw(), false);
 		betterLore$syncSlidersToActiveColor();
 		betterLore$applyAnvilLayout();
 		betterLore$syncTextPreviewVisibility();
@@ -391,7 +396,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		if (betterLore$dirty && betterLore$sendDelay <= 0 && ClientAnvilLoreNetworking.canSendLoreUpdate()) {
-			ClientAnvilLoreNetworking.sendLoreUpdate(new ServerboundAnvilLoreUpdatePayload(menu.containerId, betterLore$sessionId, betterLore$raw));
+			ClientAnvilLoreNetworking.sendLoreUpdate(new ServerboundAnvilLoreUpdatePayload(menu.containerId, betterLore$sessionId, betterLore$loreMarkup.raw()));
 			betterLore$dirty = false;
 		}
 	}
@@ -498,7 +503,8 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		String rawName = betterLore$limitRawInput(name.getValue());
-		ParseResult parsedName = LoreMarkupParser.parseName(rawName);
+		betterLore$nameMarkup.edit(rawName);
+		ParseResult parsedName = LoreMarkupParser.parseName(betterLore$nameMarkup.raw());
 		Component preview = parsedName.isSuccess()
 				? LoreComponents.toNameComponent(parsedName.document())
 				: Component.literal(rawName).withStyle(Style.EMPTY.withColor(0xFF5555));
@@ -1021,7 +1027,8 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		name.setX(leftPos + 62);
 		name.setY(topPos + 24);
 		name.setWidth(103);
-		betterLore$lastObservedName = betterLore$limitRawInput(name.getValue());
+		betterLore$nameMarkup.edit(betterLore$limitRawInput(name.getValue()));
+		betterLore$lastObservedName = betterLore$nameMarkup.raw();
 		betterLore$lastSentName = betterLore$lastObservedName;
 	}
 
@@ -1031,21 +1038,28 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			return;
 		}
 
-		String current = betterLore$limitRawInput(name.getValue());
+		String input = betterLore$limitRawInput(name.getValue());
+		betterLore$nameMarkup.edit(input);
+		String current = betterLore$nameMarkup.text();
+		String stored = betterLore$nameMarkup.raw();
 		if (!current.equals(name.getValue())) {
+			int cursor = EditorMarkup.visiblePosition(input, name.getCursorPosition());
+			int anchor = EditorMarkup.visiblePosition(input, ((EditBoxAccessor) name).betterLore$getHighlightPos());
 			betterLore$suppressNameSync = true;
 			name.setValue(current);
+			name.setCursorPosition(Math.min(cursor, current.length()));
+			name.setHighlightPos(Math.min(anchor, current.length()));
 			betterLore$suppressNameSync = false;
 		}
 
 		if (betterLore$nameStateGraceTicks > 0) {
-			betterLore$lastObservedName = current;
+			betterLore$lastObservedName = stored;
 			betterLore$nameStateGraceTicks--;
 			return;
 		}
 
-		if (!current.equals(betterLore$lastObservedName)) {
-			betterLore$lastObservedName = current;
+		if (!stored.equals(betterLore$lastObservedName)) {
+			betterLore$lastObservedName = stored;
 			betterLore$nameDirty = true;
 			betterLore$nameSendDelay = betterLore$SEND_DELAY_TICKS;
 		}
@@ -1055,9 +1069,9 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		if (betterLore$nameDirty && betterLore$nameSendDelay <= 0) {
-			if (!current.equals(betterLore$lastSentName)) {
-				ClientAnvilLoreNetworking.sendNameUpdate(new ServerboundAnvilNameUpdatePayload(menu.containerId, betterLore$sessionId, current));
-				betterLore$lastSentName = current;
+			if (!stored.equals(betterLore$lastSentName)) {
+				ClientAnvilLoreNetworking.sendNameUpdate(new ServerboundAnvilNameUpdatePayload(menu.containerId, betterLore$sessionId, stored));
+				betterLore$lastSentName = stored;
 			}
 			betterLore$nameDirty = false;
 		}
@@ -1069,12 +1083,13 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			return;
 		}
 
-		String safeRawName = betterLore$limitRawInput(rawNameMarkup == null ? "" : rawNameMarkup);
+		betterLore$nameMarkup.load(betterLore$limitRawInput(rawNameMarkup == null ? "" : rawNameMarkup));
+		String safeRawName = betterLore$nameMarkup.text();
 		boolean forceCustomNameSync = false;
 		betterLore$suppressNameSync = true;
 		if (!safeRawName.isEmpty()) {
 			name.setValue(safeRawName);
-			betterLore$lastObservedName = safeRawName;
+			betterLore$lastObservedName = betterLore$nameMarkup.raw();
 			// Force one custom name sync so the server can correct vanilla's raw-tag rename preview.
 			betterLore$lastSentName = "";
 			forceCustomNameSync = true;
@@ -1101,16 +1116,33 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			return;
 		}
 
-		betterLore$raw = trimmed;
-		betterLore$parseResult = LoreMarkupParser.parse(trimmed);
+		betterLore$loreMarkup.edit(trimmed);
+		betterLore$raw = betterLore$loreMarkup.text();
+		betterLore$parseResult = LoreMarkupParser.parse(betterLore$loreMarkup.raw());
+		if (!betterLore$raw.equals(value)) {
+			MultilineTextField field = ((MultiLineEditBoxAccessor) betterLore$editor).betterLore$getTextField();
+			int cursor = EditorMarkup.visiblePosition(trimmed, field.cursor());
+			int anchor = EditorMarkup.visiblePosition(trimmed, ((MultilineTextFieldAccessor) field).betterLore$getSelectCursor());
+			betterLore$suppressListener = true;
+			field.setValue(betterLore$raw);
+			field.setSelecting(false);
+			field.seekCursor(Whence.ABSOLUTE, Math.min(anchor, betterLore$raw.length()));
+			field.setSelecting(true);
+			field.seekCursor(Whence.ABSOLUTE, Math.min(cursor, betterLore$raw.length()));
+			field.setSelecting(false);
+			betterLore$suppressListener = false;
+		}
 		betterLore$dirty = true;
 		betterLore$sendDelay = betterLore$SEND_DELAY_TICKS;
 	}
 
 	@Unique
 	private void betterLore$setEditorValue(String value, boolean dirty) {
-		betterLore$raw = betterLore$limitRawInput(value == null ? "" : value);
-		betterLore$parseResult = LoreMarkupParser.parse(betterLore$raw);
+		String input = betterLore$limitRawInput(value == null ? "" : value);
+		if (dirty) betterLore$loreMarkup.edit(input);
+		else betterLore$loreMarkup.load(input);
+		betterLore$raw = betterLore$loreMarkup.text();
+		betterLore$parseResult = LoreMarkupParser.parse(betterLore$loreMarkup.raw());
 		betterLore$dirty = dirty;
 
 		if (betterLore$editor != null) {
@@ -1757,6 +1789,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		}
 
 		if (betterLore$insertTargetName && name != null) {
+			betterLore$tickNameSender();
 			name.visible = true;
 			MarkupInsertion.Result insertion = MarkupInsertion.wrap(
 					name.getValue(),
@@ -1769,13 +1802,16 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 			if (!insertion.changed()) {
 				return;
 			}
+			int start = Math.min(name.getCursorPosition(), ((EditBoxAccessor) name).betterLore$getHighlightPos());
+			int end = Math.max(name.getCursorPosition(), ((EditBoxAccessor) name).betterLore$getHighlightPos());
+			if (!betterLore$nameMarkup.wrap(start, end, openingTag, closingTag)) return;
 
 			betterLore$suppressNameSync = true;
 			name.setValue(insertion.text());
 			name.setCursorPosition(insertion.cursor());
 			name.setHighlightPos(insertion.anchor());
 			betterLore$suppressNameSync = false;
-			betterLore$lastObservedName = insertion.text();
+			betterLore$lastObservedName = betterLore$nameMarkup.raw();
 			betterLore$nameDirty = true;
 			betterLore$nameSendDelay = betterLore$SEND_DELAY_TICKS;
 			name.setFocused(true);
@@ -1804,6 +1840,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		if (!insertion.changed()) {
 			return;
 		}
+		if (!betterLore$loreMarkup.wrap(Math.min(cursor, anchor), Math.max(cursor, anchor), openingTag, closingTag)) return;
 
 		betterLore$suppressListener = true;
 		textField.setValue(insertion.text());
@@ -1817,7 +1854,7 @@ public abstract class AnvilScreenMixin extends ItemCombinerScreen<AnvilMenu> imp
 		betterLore$suppressListener = false;
 
 		betterLore$raw = insertion.text();
-		betterLore$parseResult = LoreMarkupParser.parse(insertion.text());
+		betterLore$parseResult = LoreMarkupParser.parse(betterLore$loreMarkup.raw());
 		betterLore$dirty = true;
 		betterLore$sendDelay = betterLore$SEND_DELAY_TICKS;
 		betterLore$focusLoreEditor();

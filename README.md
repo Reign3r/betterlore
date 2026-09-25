@@ -1,61 +1,59 @@
-<p align="center">
-  <img src="docs/icon.jpg" width="140" alt="Better Lore icon">
-</p>
+![Better Lore Banner](https://cdn.modrinth.com/data/cached_images/94d052354e3ce00ab4e0ac170b3c0238fa427298.jpeg)
 
-<h1 align="center">Better Lore</h1>
+# Better Lore
 
-<p align="center">
-  <strong>A vanilla-friendly anvil editor for colored item names and lore.</strong>
-</p>
+**A vanilla-friendly anvil editor for colored item names and lore.**
+
 
 <p align="center">
-  <a href="https://modrinth.com/mod/better-lore" target="_blank">
-    <img src="docs/images/modrinth.png" align="absmiddle" alt="Modrinth" width="18" height="18" />
+  <a href="https://modrinth.com/mod/better-lore">
+    <img src="https://cdn.modrinth.com/data/cached_images/8dfa755baea22ab94040143c6a120417d2171f42.png" alt="Modrinth" width="30" height="30" align="absmiddle" style="image-rendering: pixelated;">
   </a>
-  <a href="https://modrinth.com/mod/better-lore" target="_blank"><b>Modrinth</b></a> | 
-  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank"> 
-    <img src="https://cdn.simpleicons.org/curseforge/F16436" alt="CurseForge" width="18" height="18" align="absmiddle" />
-  </a> 
-  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore" target="_blank"><b>CurseForge</b>
-  </a> | 
-  <a href="https://github.com/Reign3r/betterlore" target="_blank"> 
-    <img src="https://cdn.simpleicons.org/github/ffffff" alt="GitHub" width="18" height="18" align="absmiddle" />
+  <a href="https://modrinth.com/mod/better-lore"><b>Modrinth</b></a> |
+
+  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore">
+    <img src="https://cdn.modrinth.com/data/cached_images/0062bc77ddb8481e9feccf29f295457fb115a066_0.webp" alt="CurseForge" width="30" height="30" align="absmiddle" style="image-rendering: pixelated;">
   </a>
-  <a href="https://github.com/Reign3r/betterlore" target="_blank"><b>GitHub</b>
-  </a> | 
-  <a href="https://github.com/Reign3r/betterlore/issues" target="_blank"> 
-    <img src="https://cdn.simpleicons.org/github/ffffff" alt="Issues" width="18" height="18" align="absmiddle" />
-  </a> 
-  <a href="https://github.com/Reign3r/betterlore/issues" target="_blank"><b>Issues</b>
-  </a> | 
-  <a href="https://ko-fi.com/reign3r" target="_blank">
-    <img src="https://cdn.simpleicons.org/kofi/FF5E5B" alt="Ko-fi" width="18" height="18" align="absmiddle" />
+  <a href="https://www.curseforge.com/minecraft/mc-mods/better-lore"><b>CurseForge</b></a> |
+
+  <a href="https://github.com/Reign3r/betterlore">
+    <img src="https://cdn.modrinth.com/data/cached_images/d36f1597da146f8ae71f6ada20e320eae0ee608a_0.webp" alt="GitHub" width="30" height="30" align="absmiddle" style="image-rendering: pixelated;">
   </a>
-  <a href="https://ko-fi.com/reign3r" target="_blank"><b>Support on Ko-fi</b></a>
+  <a href="https://github.com/Reign3r/betterlore"><b>GitHub</b></a> |
+
+  <a href="https://github.com/Reign3r/betterlore/issues">
+    <img src="https://cdn.modrinth.com/data/cached_images/f1650c997c4c53a1964069b6d0f6d8fcfafe2852_0.webp" alt="Issues" width="30" height="30" align="absmiddle" style="image-rendering: pixelated;">
+  </a>
+  <a href="https://github.com/Reign3r/betterlore/issues"><b>Issues</b></a> |
+
+  <a href="https://ko-fi.com/reign3r">
+    <img src="https://cdn.modrinth.com/data/cached_images/213977e3d437f9a3284835aa7150177e30841b0b_0.webp" alt="Ko-fi" width="30" height="30" align="absmiddle" style="image-rendering: pixelated;">
+  </a>
+  <a href="https://ko-fi.com/reign3r"><b>Support on Ko-fi</b></a>
 </p>
+
 
 ## What is Better Lore?
 
-Better Lore adds a survival-friendly extension to the anvil. You can now create unique items by customizing your name or adding lore to them using anvil!
+Better Lore adds a survival-friendly extension to the anvil. You can now create unique items by customizing their name or adding lore to them using the anvil!
+
+Create named weapons, roleplay items, quest rewards, trophies, server event items or just give your favorite tools a little more personality.
 
 ## Features
 
-- Add lore to any item through the anvil.
-- Color and format item names.
-- Add multiline, colored, formatted lore.
-- Pick colors with RGB sliders, direct hex input, or a color wheel.
-- Randomize the currently selected color with the dice button.
-- Keep Better Lore entries separate from other mods' lore; only Better Lore-owned lines are editable here.
-- Preserve exact Better Lore name markup and all lore when boats, minecarts, armor stands, or bucketable mobs make an item/entity/item round trip.
-- Keep Better Lore text on water, lava, milk, and powder-snow buckets while they are emptied/refilled; mob buckets show the contained mob's text while privately retaining the bucket's own text for release.
-- Preserve exact Better Lore names and lore when copper golems become statues and later awaken or drop again.
-- Keep placed Better Lore text attached to dragon eggs when they teleport.
-- Lore changes add one extra level to the anvil cost (will be configurable in the future).
-- Layout compatibility with JEI and REI.
+- Add lore to any item through the anvil, it can utilize colors, gradients or formatting to stand out.
+- Customize item names in the same way as lore. The tags don't count towards character limit and the limit itself is larger than vanilla, so you can easily name your sword with something like Dark King Grutmore's Edge of Annihilation or just settle down with The Throngler.
+- Rename your pets, armor stands, minecarts, blocks and many more! They keep their properties both in your inventory and when placed in the world.
+- Pick colors with RGB sliders, direct hex input, a color wheel or just let the randomizer decide for you.
+- Use can also directly edit the colors used in the tags to achieve a gradient composed of 3 or more colors.
+- Lore changes add one extra level to the anvil cost.
+- Works with normal survival mechanics and should be compatible with most mods, since the mod, tries to manage only its own lore and append it to the items. If you've found an incopatibility and want it fixed, let me know through the issues.
+- Compatible with JEI and REI layouts.
+- Vanilla clients can still join servers with Better Lore installed. This allows players who wantthe mod on their client to utilize the features, while others are not forced to download it.
 
-## QuickText examples
+## What tags can I use to name item?
 
-Tags used:
+Just utilize the following supported tags:
 
 ```text
 <c #ff6630>Fire</c>
@@ -66,47 +64,43 @@ Tags used:
 <st>Strikethrough</st>
 <obf>Obfuscated</obf>
 ```
+You can always use the insert option in the menu to play around with the features and explore yourself.
 
 ## Showcase
 
-<div style="max-width: 400px; height: auto">
-<h3>Mace example</h3>
+### Items Example
 
-![](docs/images/mace.jpg)
+<img src="https://cdn.modrinth.com/data/cached_images/1d032cd7bd9abc4e86179c01662b7e07289bd727.jpeg" alt="Sword Naming Showcase" width="400">
 
-<h3>Yummers?</h3>
+</br>
+<img src="https://cdn.modrinth.com/data/cached_images/f428f5f0dcf41460049f9120525a7bc0e25145d2.jpeg" alt="Mace example" width="400">
 
-![](docs/images/moss.jpg)
+### Huh?
 
-<h3>Trident with some lore</h3>
+<img src="https://cdn.modrinth.com/data/cached_images/af7c9e5384c27c8c5f311220ebf8a7e4bc6c7cab.jpeg" alt="Moss with Yummers lore" width="400">
 
-![](docs/images/trident.jpg)
+### Pets feature (since 1.2.0)
 
-</div>
+<img src="https://cdn.modrinth.com/data/cached_images/39d16a7c1bb41d21de2beeabe9280c1ac045bde2.jpeg" alt="Sword Naming Showcase" width="400">
+
 
 ## Installation
 
 ### Requirements
 
 - Minecraft Java Edition 26.1.2
-- Fabric Loader
-- Fabric API
-- Text Placeholder API
+- Fabric Loader (no need on Forge/NeoForge)
+- Fabric API (no need on Forge/NeoForge)
+- For versions 1.3.0 and below Text Placeholder API is needed on Fabric
 
-Fabric API and Text Placeholder API are required dependencies. Install them alongside Better Lore.
-
-### Compatibility releases
-
-Since 1.2.0, Better Lore maintains and publishes only the range compatibility artifacts defined by the release matrix—currently five files, rather than one file per exact loader/version target. The 52 exact-target jars are disposable internal build and test inputs used to prove the ranges; they are not separate releases or maintained deployments. A future public artifact is added only when a real loader or binary-compatibility boundary requires one. See [release compatibility](docs/release-compatibility.md) for the public groups, retained binary-family checks, and Prism smoke-test workflow.
-
-Starting with 1.3.0, server-side companion mods can integrate without copying Better Lore internals through the versioned [server API](docs/server-api.md). API v1 is included in every selected implementation represented by the five compatibility artifacts and does not add a client requirement.
-
-### Client and server behavior
+## Client and server behavior
 
 Install Better Lore on the **server** to enable anvil-based lore and name editing.
 
-Install Better Lore on the **client** to use the custom anvil UI. Players without the client mod can still join a modded server, but they will only see the normal vanilla anvil screen.
+Install Better Lore on the **client** to use the custom anvil UI.
+
+Players without the client mod can still join a modded server, but they will only see the normal vanilla anvil screen.
 
 ## Support the project
 
-If Better Lore is useful for your server, modpack, or roleplay setup, consider <a href="https://ko-fi.com/reign3r">supporting the development on Ko-fi</a>. It helps keep the mod maintained, tested, and updated. Thank you!
+If Better Lore is useful for your server, modpack, or roleplay setup, consider [supporting development on Ko-fi](https://ko-fi.com/reign3r). It helps keep the mod maintained, tested, and updated. Thank you!

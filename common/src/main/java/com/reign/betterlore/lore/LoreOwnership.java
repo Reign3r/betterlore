@@ -90,10 +90,10 @@ public final class LoreOwnership {
 			return new Partition(foreign, owned);
 		}
 
-		if (!visible.equals(legacyOwned)) {
+		if (!LoreMigration.equivalent(visible, legacyOwned)) {
 			return new Partition(visible, List.of());
 		}
-		return new Partition(List.of(), legacyOwned);
+		return new Partition(List.of(), visible);
 	}
 
 	private static Component markOwned(Component line) {

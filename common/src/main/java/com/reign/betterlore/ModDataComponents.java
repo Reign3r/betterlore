@@ -14,6 +14,8 @@ public final class ModDataComponents {
 	private static final String LEGACY_SERVER_API_OWNED_LORE_VERSION_KEY = "server_api_owned_lore_version";
 	private static final String LEGACY_SERVER_API_OWNED_LORE_VERSION = "1";
 	private static final String RAW_NAME_MARKUP_KEY = "raw_name_markup";
+	private static final String OWNED_NAME_VERSION_KEY = "owned_name_version";
+	private static final int OWNED_NAME_VERSION = 1;
 
 	private ModDataComponents() {
 	}
@@ -78,8 +80,23 @@ public final class ModDataComponents {
 		setString(stack, RAW_NAME_MARKUP_KEY, rawMarkup);
 	}
 
+	/** Marks validated name source produced by the current editor/migration path. */
+	public static void setOwnedNameMarkup(ItemStack stack, String rawMarkup) {
+		if (rawMarkup == null || rawMarkup.isEmpty()) {
+			removeRawNameMarkup(stack);
+			return;
+		}
+		setString(stack, RAW_NAME_MARKUP_KEY, rawMarkup);
+		backend().setInt(stack, ROOT_KEY, OWNED_NAME_VERSION_KEY, OWNED_NAME_VERSION);
+	}
+
+	public static boolean hasCurrentNameOwnership(ItemStack stack) {
+		return backend().getInt(stack, ROOT_KEY, OWNED_NAME_VERSION_KEY, 0) == OWNED_NAME_VERSION;
+	}
+
 	public static void removeRawNameMarkup(ItemStack stack) {
 		removeString(stack, RAW_NAME_MARKUP_KEY);
+		removeString(stack, OWNED_NAME_VERSION_KEY);
 	}
 
 	private static String getString(ItemStack stack, String key) {

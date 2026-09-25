@@ -51,19 +51,19 @@ public final class LoreComponents {
 
 		stack.set(DataComponents.CUSTOM_NAME, toNameComponent(document));
 		if (rawMarkup != null) {
-			ModDataComponents.setRawNameMarkup(stack, rawMarkup);
+			ModDataComponents.setOwnedNameMarkup(stack, rawMarkup);
 		}
 	}
 
 	public static boolean equivalentToExistingLore(ItemStack stack, LoreDocument document) {
-		return ownedComponents(stack).equals(toComponents(document));
+		return LoreMigration.equivalent(ownedComponents(stack), toComponents(document));
 	}
 
 	public static boolean equivalentToExistingName(Component existingName, LoreDocument document) {
 		if (existingName == null) {
 			return document.isEmpty();
 		}
-		return existingName.equals(toNameComponent(document));
+		return LoreMigration.equivalent(List.of(existingName), List.of(toNameComponent(document)));
 	}
 
 	public static List<Component> toComponents(LoreDocument document) {
@@ -119,7 +119,10 @@ public final class LoreComponents {
 		if (!parsed.isSuccess()) {
 			return false;
 		}
-		applyTo(stack, rawMarkup, parsed.document());
+		// Layout normalization must not re-render saved gradients or regroup
+		// components. Only move/mark the already recognized, exact visible lines.
+		setVisibleLore(stack, normalized);
+		ModDataComponents.setOwnedLoreMarkup(stack, rawMarkup);
 		return true;
 	}
 
@@ -152,15 +155,18 @@ public final class LoreComponents {
 	}
 
 	private static List<Component> legacyOwnedComponents(ItemStack stack) {
-		if (ModDataComponents.hasCurrentLoreOwnership(stack)) {
+		return legacyOwnedComponents(ModDataComponents.getRawLoreMarkup(stack), visibleComponents(stack),
+				ModDataComponents.hasCurrentLoreOwnership(stack));
+	}
+
+	static List<Component> legacyOwnedComponents(String rawMarkup, List<Component> visible, boolean currentOwnership) {
+		if (currentOwnership) {
 			return List.of();
 		}
-		String rawMarkup = ModDataComponents.getRawLoreMarkup(stack);
 		if (rawMarkup == null || rawMarkup.isEmpty()) {
 			return List.of();
 		}
-		ParseResult parsed = LoreMarkupParser.parse(rawMarkup);
-		return parsed.isSuccess() ? toComponents(parsed.document()) : List.of();
+		return LoreMigration.matchingMarkup(rawMarkup, visible, false) != null ? visible : List.of();
 	}
 
 	private static String serializeDocument(LoreDocument document) {

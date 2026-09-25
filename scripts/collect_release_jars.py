@@ -31,6 +31,7 @@ from release_matrix import (
     version_label,
 )
 from verify_matrix import Artifact, ROOT, declared_artifacts, validate_matrix
+from verify_release_jars import _classfile_declaration, _classfile_member_references
 
 
 RELEASE_DIRECTORY_NAME = "release"
@@ -593,6 +594,52 @@ def _assert_flat_resource_payload(
         )
 
 
+def _package_access_dependencies(classes: dict[str, bytes]) -> dict[str, set[str]]:
+    """Find same-package relationships that must survive a caller's relocation.
+
+    Public facades used by shared entrypoints (including JEI) must remain shared
+    when their callers only use public members. Class/member declarations use
+    the same classfile decoder as the independent post-packaging access check.
+    """
+    declarations = {path[:-6]: _classfile_declaration(data) for path, data in classes.items()}
+
+    def resolve(owner: str, key: tuple[str, str], fields: bool, seen: set[str]):
+        if owner in seen or owner not in declarations:
+            return None
+        seen.add(owner)
+        declaration = declarations[owner]
+        table = declaration.fields if fields else declaration.methods
+        if key in table:
+            value = table[key]
+            return owner, value.access_flags if fields else value
+        if key[0] == "<init>":
+            return None
+        parents = declaration.interfaces + (declaration.super_class,) if fields else (declaration.super_class,) + declaration.interfaces
+        for parent in parents:
+            resolved = resolve(parent, key, fields, seen) if parent else None
+            if resolved is not None:
+                return resolved
+        return None
+
+    dependencies: dict[str, set[str]] = {}
+    for path, data in classes.items():
+        package = path.rpartition("/")[0]
+        required = {
+            reference + ".class" for reference in _class_references(data)
+            if reference in declarations and reference.rpartition("/")[0] == package
+            and not declarations[reference].access_flags & 0x0001
+        }
+        for fields in (False, True):
+            for owner, name, descriptor in _classfile_member_references(data, fields=fields):
+                resolved = resolve(owner, (name, descriptor), fields, set())
+                if resolved is not None:
+                    declaring, access = resolved
+                    if declaring.rpartition("/")[0] == package and not access & 0x0001:
+                        required.add(declaring + ".class")
+        dependencies[path] = required
+    return dependencies
+
+
 def _variant_class_paths(
     archives: list[tuple[tuple[str, ...], Path, dict[str, bytes]]],
     loader: str,
@@ -648,21 +695,38 @@ def _variant_class_paths(
     )
     variants.update(path for path in candidates if path.endswith(implementation_suffix))
 
+    references_by_path = {
+        path: set().union(
+            *(_class_references(classes[path]) for _, _, classes in archives if path in classes)
+        )
+        for path in candidates
+    }
+    package_dependencies_by_path: dict[str, set[str]] = {}
+    for _, _, classes in archives:
+        for path, dependencies in _package_access_dependencies(classes).items():
+            package_dependencies_by_path.setdefault(path, set()).update(dependencies)
     changed = True
     while changed:
         changed = False
         variant_names = {path[:-6] for path in variants}
         for path in sorted(candidates - variants):
-            references = set().union(
-                *(
-                    _class_references(classes[path])
-                    for _, _, classes in archives
-                    if path in classes
-                )
-            )
+            references = references_by_path[path]
             if references & variant_names:
                 variants.add(path)
                 changed = True
+
+        # Following only incoming edges strands package-private helpers such as
+        # LegacyGradientColors. Also follow outgoing edges requiring package
+        # access, without moving public-only facades consumed by shared code.
+        package_dependencies = {
+            dependency
+            for path in variants
+            for dependency in package_dependencies_by_path[path]
+            if dependency in candidates - variants
+        }
+        if package_dependencies:
+            variants.update(package_dependencies)
+            changed = True
 
         outer_names = {path[:-6].split("$", 1)[0] for path in variants}
         nestmates = {
@@ -978,9 +1042,6 @@ def _fabric_candidate(
     )
     dependencies["fabric-api"] = ">=" + _minimum_version(
         [state.profiles[version]["deps.fabric_api"] for version in family]
-    )
-    dependencies["placeholder-api"] = ">=" + _minimum_version(
-        [state.profiles[version]["placeholder_api_version"] for version in family]
     )
     dependencies["java"] = ">=" + str(
         min(int(state.profiles[version]["java.version"]) for version in family)
@@ -1439,18 +1500,11 @@ def collect_release_jars(root: Path = ROOT, destination: Path | None = None) -> 
 
 
 def _synthetic_reference_class(*references: str, marker: bytes = b"") -> bytes:
-    """Build the constant-pool subset used by the collector's relocation scan."""
-
-    constants: list[bytes] = []
-    for reference in references:
-        encoded = reference.encode("utf-8")
-        constants.append(b"\x01" + len(encoded).to_bytes(2, "big") + encoded)
-        constants.append(b"\x07" + (len(constants)).to_bytes(2, "big"))
-    return (
-        b"\xca\xfe\xba\xbe\x00\x00\x00\x41"
-        + (len(constants) + 1).to_bytes(2, "big")
-        + b"".join(constants)
-        + marker
+    """Build a declaration and constant pool for the relocation self-tests."""
+    from verify_release_jars import _synthetic_classfile
+    return _synthetic_classfile(
+        _MOD_CLASS_PREFIX + "Synthetic", set(), references=references,
+        utf8_constants=(marker.decode("utf-8"),),
     )
 
 

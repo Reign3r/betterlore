@@ -48,18 +48,26 @@ val testAll by tasks.registering {
 }
 
 if (project.name == releaseCoordinator) {
+    val testReleasePackaging by tasks.registering(Exec::class) {
+        group = "verification"
+        description = "Tests package access and dependency relocation in release archives."
+        workingDir(rootProject.projectDir)
+        commandLine(pythonExecutable, "-m", "unittest", "discover", "-s", "scripts", "-p", "test_release_packaging.py")
+    }
     val collectReleaseJars by tasks.registering(Exec::class) {
         group = "distribution"
         description = "Packages verified compatibility-range jars into build/release."
         dependsOn(enabledMinecraftVersions.map { ":$it:buildAll" })
+        dependsOn(testReleasePackaging)
         commandLine(pythonExecutable, rootProject.file("scripts/collect_release_jars.py").absolutePath)
     }
 
     tasks.register<Exec>("verifyReleaseJars") {
         group = "verification"
-        description = "Validates release jars, descriptors, mixins, and ServiceLoader wiring."
+        description = "Validates release jars, package access, public API, and packaged parser behavior."
         dependsOn(collectReleaseJars)
-        commandLine(pythonExecutable, rootProject.file("scripts/verify_release_jars.py").absolutePath)
+        commandLine(pythonExecutable, rootProject.file("scripts/verify_release_jars.py").absolutePath,
+            "--java-home", System.getProperty("java.home"))
     }
 }
 
