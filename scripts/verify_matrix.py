@@ -63,8 +63,6 @@ COMMON_PROFILE_KEYS = (
     "minecraft.resource_pack_minor",
     "deps.fabric_loader",
     "deps.fabric_api",
-    "deps.placeholder_api",
-    "placeholder_api_version",
     "deps.neoforge",
     "neoforge_loader_version",
     "deps.forge",

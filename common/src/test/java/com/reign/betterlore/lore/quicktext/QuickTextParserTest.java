@@ -9,10 +9,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class QuickTextFallbackParserTest {
+class QuickTextParserTest {
 	@Test
-	void cleanRoomFallbackSupportsQuickTextColorAliases() {
-		ParseResult result = QuickTextFallbackParser.parse("<color #FF6600>Fire</color>");
+	void sharedParserSupportsQuickTextColorAliases() {
+		ParseResult result = QuickTextParser.parse("<color #FF6600>Fire</color>");
 
 		assertTrue(result.isSuccess());
 		LoreRun run = result.document().lines().getFirst().runs().getFirst();
@@ -21,8 +21,8 @@ class QuickTextFallbackParserTest {
 	}
 
 	@Test
-	void cleanRoomFallbackUsesSmoothGradientByDefault() {
-		ParseResult result = QuickTextFallbackParser.parse("<gr #ff0000 #0000ff>ABC</gr>");
+	void sharedParserUsesSmoothGradientByDefault() {
+		ParseResult result = QuickTextParser.parse("<gr #ff0000 #0000ff>ABC</gr>");
 
 		assertTrue(result.isSuccess());
 		assertEquals(3, result.visibleCodePoints());
@@ -32,8 +32,8 @@ class QuickTextFallbackParserTest {
 	}
 
 	@Test
-	void cleanRoomFallbackSupportsHardGradientTags() {
-		ParseResult result = QuickTextFallbackParser.parse("<hgr #ff0000 #0000ff>ABCD</hgr>");
+	void sharedParserSupportsHardGradientTags() {
+		ParseResult result = QuickTextParser.parse("<hgr #ff0000 #0000ff>ABCD</hgr>");
 
 		assertTrue(result.isSuccess());
 		assertEquals(4, result.visibleCodePoints());
@@ -42,16 +42,16 @@ class QuickTextFallbackParserTest {
 	}
 
 	@Test
-	void cleanRoomFallbackSupportsTypeHardModifier() {
-		ParseResult result = QuickTextFallbackParser.parse("<gradient #ff0000 #0000ff type:hard>AB</gradient>");
+	void sharedParserSupportsTypeHardModifier() {
+		ParseResult result = QuickTextParser.parse("<gradient #ff0000 #0000ff type:hard>AB</gradient>");
 
 		assertTrue(result.isSuccess());
 		assertEquals(0xFF0000, result.document().lines().getFirst().runs().getFirst().rgb());
 		assertEquals(0x0000FF, result.document().lines().getFirst().runs().getLast().rgb());
 	}
 	@Test
-	void cleanRoomFallbackSupportsAllFormattingTags() {
-		ParseResult result = QuickTextFallbackParser.parse("<b>B</b><i>I</i><underlined>U</underlined><st>S</st><obf>O</obf>");
+	void sharedParserSupportsAllFormattingTags() {
+		ParseResult result = QuickTextParser.parse("<b>B</b><i>I</i><underlined>U</underlined><st>S</st><obf>O</obf>");
 
 		assertTrue(result.isSuccess());
 		var runs = result.document().lines().getFirst().runs();
@@ -68,8 +68,8 @@ class QuickTextFallbackParserTest {
 	}
 
 	@Test
-	void cleanRoomFallbackTreatsLegacySquareTagsAsLiteralText() {
-		ParseResult result = QuickTextFallbackParser.parse("[c:#ff6600]Fire[/c]");
+	void sharedParserTreatsLegacySquareTagsAsLiteralText() {
+		ParseResult result = QuickTextParser.parse("[c:#ff6600]Fire[/c]");
 
 		assertTrue(result.isSuccess());
 		LoreRun run = result.document().lines().getFirst().runs().getFirst();
@@ -78,8 +78,8 @@ class QuickTextFallbackParserTest {
 	}
 
 	@Test
-	void cleanRoomFallbackDropsUnsafeTagsAsLiteralText() {
-		ParseResult result = QuickTextFallbackParser.parse("<click run_command:/kill @a>bad</click>");
+	void sharedParserDropsUnsafeTagsAsLiteralText() {
+		ParseResult result = QuickTextParser.parse("<click run_command:/kill @a>bad</click>");
 
 		assertTrue(result.isSuccess());
 		String text = result.document().lines().getFirst().runs().stream()

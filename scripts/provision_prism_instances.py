@@ -12,33 +12,16 @@ import shutil
 import sys
 import zipfile
 
+from release_matrix import MINECRAFT_VERSIONS, published_artifacts
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSIONS = (
-    "1.20.5",
-    "1.20.6",
-    "1.21",
-    "1.21.1",
-    "1.21.2",
-    "1.21.3",
-    "1.21.4",
-    "1.21.5",
-    "1.21.6",
-    "1.21.7",
-    "1.21.8",
-    "1.21.9",
-    "1.21.10",
-    "1.21.11",
-    "26.1",
-    "26.1.1",
-    "26.1.2",
-    "26.2",
-)
 LOADERS = {
     "Fabric": ("fabric", "net.fabricmc.fabric-loader", "deps.fabric_loader"),
     "NeoForge": ("neoforge", "net.neoforged", "deps.neoforge"),
     "Forge": ("forge", "net.minecraftforge", "deps.forge"),
 }
+# Retain the retired dependency prefix only to clean previously provisioned
+# testing instances during full provisioning. It is no longer installed.
 OWNED_MOD_PREFIXES = ("better-lore-", "fabric-api-", "placeholder-api-", "jei-")
 TEST_MIN_MEMORY_MB = 1024
 TEST_MAX_MEMORY_MB = 2048
@@ -89,30 +72,6 @@ def cached_module_jar(
     )
 
 
-def fabric_mod_version(path: Path) -> str:
-    with zipfile.ZipFile(path) as archive:
-        payload = json.loads(archive.read("fabric.mod.json").decode("utf-8"))
-    version = str(payload.get("version", "")).strip()
-    if not version:
-        raise ProvisionError(f"{path}: fabric.mod.json has no version")
-    return version
-
-
-def placeholder_jar(cache_root: Path, coordinate: str) -> tuple[Path, str]:
-    if coordinate.startswith("maven.modrinth:"):
-        group, artifact, version = coordinate.split(":", 2)
-        source = cached_module_jar(cache_root, group, artifact, version)
-        display_version = fabric_mod_version(source)
-        return source, f"placeholder-api-{display_version}.jar"
-
-    if coordinate.count(":") == 2:
-        group, artifact, version = coordinate.split(":", 2)
-    else:
-        group, artifact, version = "eu.pb4", "placeholder-api", coordinate
-    source = cached_module_jar(cache_root, group, artifact, version)
-    return source, source.name
-
-
 def loader_version(minecraft: str, loader: str, raw_version: str) -> str:
     if loader != "Forge":
         return raw_version
@@ -124,11 +83,11 @@ def loader_version(minecraft: str, loader: str, raw_version: str) -> str:
 
 def expected_instances() -> list[tuple[str, str, str, str, dict[str, str]]]:
     instances: list[tuple[str, str, str, str, dict[str, str]]] = []
-    for minecraft in VERSIONS:
+    targets = {(artifact.loader, version) for artifact in published_artifacts() for version in artifact.versions}
+    for minecraft in MINECRAFT_VERSIONS:
         properties = read_properties(ROOT / "versions" / minecraft / "gradle.properties")
         for display_loader, (artifact_loader, component_uid, property_name) in LOADERS.items():
-            raw_version = properties.get(property_name, "UNSUPPORTED")
-            if raw_version == "UNSUPPORTED":
+            if (artifact_loader, minecraft) not in targets:
                 continue
             instances.append(
                 (
@@ -139,8 +98,8 @@ def expected_instances() -> list[tuple[str, str, str, str, dict[str, str]]]:
                     properties,
                 )
             )
-    if len(instances) != 52:
-        raise ProvisionError(f"expected 52 supported instances, resolved {len(instances)}")
+    if len(instances) != len(targets):
+        raise ProvisionError(f"expected {len(targets)} supported instances, resolved {len(instances)}")
     return instances
 
 
@@ -473,16 +432,8 @@ def provision(instances_root: Path, gradle_cache_root: Path) -> tuple[int, list[
                 "fabric-api",
                 fabric_api_version,
             )
-            placeholder, placeholder_name = placeholder_jar(
-                gradle_cache_root, properties["deps.placeholder_api"]
-            )
-            expected_mods.extend(((fabric_api, fabric_api.name), (placeholder, placeholder_name)))
-            notes.extend(
-                (
-                    f"Fabric API: {fabric_api_version}",
-                    f"Placeholder API: {fabric_mod_version(placeholder)}",
-                )
-            )
+            expected_mods.append((fabric_api, fabric_api.name))
+            notes.append(f"Fabric API: {fabric_api_version}")
 
         jei_candidates = list(staged_jei.glob(f"jei-{minecraft}-{artifact_loader}-*.jar"))
         if len(jei_candidates) > 1:

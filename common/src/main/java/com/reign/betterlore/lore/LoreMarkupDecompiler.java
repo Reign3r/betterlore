@@ -26,16 +26,18 @@ public final class LoreMarkupDecompiler {
 
 	public static String toSafeNameMarkup(ItemStack stack) {
 		String rawMarkup = ModDataComponents.getRawNameMarkup(stack);
-		if (isValidNameMarkup(rawMarkup)) {
-			return LoreMarkupParser.toPreferredMarkup(rawMarkup);
-		}
-
 		Component customName = stack.get(DataComponents.CUSTOM_NAME);
 		if (customName == null) {
 			return "";
 		}
-
+		String migrated = matchingStoredNameMarkup(rawMarkup, customName);
+		if (migrated != null) return migrated;
 		return toSafeComponentMarkup(customName);
+	}
+
+	/** Validates stored provenance before retaining a name through an item/entity transfer. */
+	public static String matchingStoredNameMarkup(String rawMarkup, Component customName) {
+		return customName == null ? null : LoreMigration.matchingMarkup(rawMarkup, List.of(customName), true);
 	}
 
 	/** Preserves the exact visible styling of one parsed lore line as QuickText. */
@@ -69,22 +71,15 @@ public final class LoreMarkupDecompiler {
 			List<Component> lines,
 			boolean allowLegacyMatch
 	) {
-		List<Component> expectedOwned = parsedLoreComponents(rawMarkup);
+		String legacyMarkup = allowLegacyMatch && !LoreOwnership.hasInlineOwnership(lines)
+				? LoreMigration.matchingMarkup(rawMarkup, lines, false) : null;
 		List<Component> ownedLines = LoreOwnership.ownedLines(
 				lines,
-				allowLegacyMatch ? expectedOwned : List.of()
+				legacyMarkup != null ? lines : List.of()
 		);
-		if (!expectedOwned.isEmpty() && ownedLines.equals(expectedOwned)) {
-			return LoreMarkupParser.toPreferredMarkup(rawMarkup);
-		}
+		String migrated = legacyMarkup != null ? legacyMarkup : LoreMigration.matchingMarkup(rawMarkup, ownedLines, false);
+		if (migrated != null) return migrated;
 		return toSafeComponentListMarkup(ownedLines);
-	}
-
-	private static List<Component> parsedLoreComponents(String rawMarkup) {
-		if (!isValidLoreMarkup(rawMarkup)) {
-			return List.of();
-		}
-		return LoreComponents.toComponents(LoreMarkupParser.parse(rawMarkup).document());
 	}
 
 	static String toSafeComponentMarkup(Component component) {
@@ -104,14 +99,6 @@ public final class LoreMarkupDecompiler {
 			appendComponent(markup, lines.get(index));
 		}
 		return markup.toString();
-	}
-
-	private static boolean isValidLoreMarkup(String rawMarkup) {
-		return rawMarkup != null && LoreMarkupParser.parse(rawMarkup).isSuccess();
-	}
-
-	private static boolean isValidNameMarkup(String rawMarkup) {
-		return rawMarkup != null && LoreMarkupParser.parseName(rawMarkup).isSuccess();
 	}
 
 	private static void appendComponent(StringBuilder markup, Component component) {

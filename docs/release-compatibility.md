@@ -21,7 +21,7 @@ Only the range artifacts returned by `published_artifacts()` are release product
 
 ## Safety checks
 
-`collect_release_jars.py` still inspects all 52 exact build outputs. The existing 12 Fabric, 13 NeoForge, and 10 Forge binary families remain the implementation-selection boundaries. Fabric retains one exact implementation per nested candidate. Forge and NeoForge keep byte-identical classes shared and relocate only version-sensitive classes plus their descriptor-level dependants into generated family namespaces. A tiny runtime selector loads one family; inactive generated classes are never initialized.
+`collect_release_jars.py` still inspects all 52 exact build outputs. The existing 12 Fabric, 13 NeoForge, and 10 Forge binary families remain the implementation-selection boundaries. Fabric retains one exact implementation per nested candidate. Forge and NeoForge keep byte-identical classes shared unless relocation requires them: version-sensitive classes, their descriptor-level dependants, and dependencies requiring access within the same package move together into generated family namespaces. This closure repeats transitively so package-private helpers and members retain their original access relationships. Calls to public facade methods do not force relocation of those shared facades. A tiny runtime selector loads one family; inactive generated classes are never initialized.
 
 The collector also:
 
@@ -37,12 +37,28 @@ The collector also:
 
 `verify_release_jars.py` recursively checks the Fabric bundle, flat-adapter descriptors, mapping namespaces, mixins, services, pack formats, source hashes, target coverage, stale files, publication strategies, public server-API ABI, and size budgets. Pack metadata is emitted on the correct side of Minecraft's format-65 boundary: older groups receive `supported_formats`, while newer groups omit the now-forbidden legacy key.
 
+Archive checks reject illegal mod-internal class/member access after relocation,
+including inherited members and broken nest membership. The release task also
+runs the packaging regression suite and executes name/lore parsing and migration
+from the actual public jars for all 52 target selections, with isolated class
+loaders and no development or game classes on their classpaths. Frozen gradient
+colors, formatting, Unicode, malformed tags, and input limits are checked. The
+JVM execution step uses Gradle's JDK (or `--java-home`, `JAVA_HOME`, then `PATH`
+when running the Python verifier directly) and has a timeout. These checks
+complement the full target suites and do not replace in-game launch coverage.
+
+Every loader uses the same built-in formatting parser. Archive verification
+rejects stale Placeholder API references, dependency declarations, and the retired
+formatting service provider. Full Prism provisioning no longer installs that
+dependency and removes copies previously managed by the testing provisioner;
+`--better-lore-only` continues to leave other mod jars untouched.
+
 ## Commands
 
 Build every exact target, collect once, and validate the published set:
 
 ```powershell
-.\gradlew.bat verifyReleaseJars --no-daemon --no-parallel --max-workers=1 --no-configuration-cache
+.\gradlew.bat testAll verifyReleaseJars --no-daemon --no-parallel --max-workers=1 --no-configuration-cache
 ```
 
 Deploy only Better Lore jars to the existing Prism testing matrix:

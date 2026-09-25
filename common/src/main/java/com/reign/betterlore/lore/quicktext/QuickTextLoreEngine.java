@@ -3,6 +3,9 @@ package com.reign.betterlore.lore.quicktext;
 import com.reign.betterlore.lore.LoreDocument;
 import com.reign.betterlore.lore.ParseResult;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public final class QuickTextLoreEngine {
 	private QuickTextLoreEngine() {
 	}
@@ -36,20 +39,21 @@ public final class QuickTextLoreEngine {
 			return ParseResult.success(LoreDocument.empty());
 		}
 
-		QuickTextParserAdapter adapter = QuickTextParserAdapters.adapter();
-		if (adapter != null) {
-			try {
-				ParseResult result = adapter.parse(sanitized.value());
-				if (result.isSuccess()) {
-					return result;
-				}
-			} catch (RuntimeException | LinkageError ignored) {
-				// A loader-specific adapter can be present on the classpath without
-				// its runtime launcher being active, such as Fabric APIs in plain
-				// JUnit or future non-Fabric loaders. Fall back to the common parser.
+		return QuickTextParser.parse(sanitized.value());
+	}
+
+	/** Bounded, dependency-free translations of previously supported parser behavior. */
+	public static List<String> migrationCandidates(String raw, boolean name) {
+		QuickTextSanitizer.SanitizedInput sanitized = name
+				? QuickTextSanitizer.sanitizeName(raw) : QuickTextSanitizer.sanitizeLore(raw);
+		if (!sanitized.isSuccess() || sanitized.value().isEmpty()) return List.of();
+		List<String> candidates = new ArrayList<>();
+		for (boolean fabric : new boolean[] {false, true}) {
+			String migrated = QuickTextParser.migrate(sanitized.value(), fabric);
+			if (migrated != null && (name ? parseName(migrated) : parseLore(migrated)).isSuccess()) {
+				candidates.add(migrated);
 			}
 		}
-
-		return QuickTextFallbackParser.parse(sanitized.value());
+		return List.copyOf(candidates);
 	}
 }

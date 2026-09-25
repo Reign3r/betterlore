@@ -10,12 +10,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-final class QuickTextFallbackParser {
-	private QuickTextFallbackParser() {
+/** Better Lore's loader-independent parser for its supported QuickText formatting. */
+final class QuickTextParser {
+	private QuickTextParser() {
 	}
 
 	static ParseResult parse(String input) {
-		Parser parser = new Parser(input);
+		Parser parser = new Parser(input, Migration.NONE);
 		ParseResult error = parser.parseUntil(null);
 		if (error != null) {
 			return error;
@@ -23,8 +24,88 @@ final class QuickTextFallbackParser {
 		return ParseResult.success(parser.buildDocument());
 	}
 
+	/** Projects a valid mode-bearing opener into ordinary editor syntax. */
+	static EditorTag editorTagAt(String input, int index) {
+		Tag tag = readTagAt(input, index);
+		if (tag == null || tag.closing()) return null;
+		if (canonicalTagName(tag.name()).equals("gradient")) {
+			GradientArguments arguments = parseGradientArguments(tag, false);
+			if (arguments == null || tag.args().stream().allMatch(arg -> parseColor(arg) != null)) return null;
+			GradientMode mode = arguments.mode();
+			String name = mode == GradientMode.HARD ? "hgr" : "gr";
+			StringBuilder opening = new StringBuilder("<").append(name);
+			for (String arg : tag.args()) if (parseColor(arg) != null) opening.append(' ').append(arg);
+			String hidden = mode == GradientMode.OKLAB || mode == GradientMode.HARD ? ""
+					: mode == GradientMode.HSV ? "hsv" : "type:" + mode.name().toLowerCase(Locale.ROOT);
+			return new EditorTag(tag.endIndex(), opening.append('>').toString(), hidden);
+		}
+		if (canonicalTagName(tag.name()).equals("rainbow") && parseRainbowArguments(tag, false) != null
+				&& "legacy_hsv".equalsIgnoreCase(namedArgument(tag.args(), "type"))) {
+			StringBuilder opening = new StringBuilder("<").append(tag.name());
+			for (String arg : tag.args()) if (!arg.toLowerCase(Locale.ROOT).startsWith("type:")) opening.append(' ').append(arg);
+			return new EditorTag(tag.endIndex(), opening.append('>').toString(), "type:legacy_hsv");
+		}
+		return null;
+	}
+
+	record EditorTag(int end, String opening, String hiddenMode) {}
+
+	static int editorTokenEnd(String input, int index) {
+		Tag tag = readTagAt(input, index);
+		return tag == null ? index + 1 : tag.endIndex();
+	}
+
+	static String migrate(String input, boolean fabric) {
+		if (fabric) return LegacyQuickTextSyntax.normalize(input);
+		Parser parser = new Parser(input, Migration.COMMON);
+		return parser.parseUntil(null) == null ? parser.markup.toString() : null;
+	}
+
+	private enum Migration { NONE, COMMON }
+
+	static String legacyOpening(String name, List<String> args) {
+		Tag tag = new Tag(name, args, false, 0);
+		String canonical = canonicalTagName(switch (name) {
+			case "colour" -> "color";
+			case "em" -> "italic";
+			case "matrix" -> "obfuscated";
+			default -> name;
+		});
+		Integer namedColor = parseColor(switch (name) {
+			case "orange" -> "gold";
+			case "light_gray", "light_grey" -> "gray";
+			case "pink" -> "light_purple";
+			case "purple" -> "dark_purple";
+			default -> name;
+		});
+		if (namedColor != null) return "<c " + LoreMarkupParser.formatHex(namedColor) + ">";
+		// These short forms belong to the shared parser, not the old dependency.
+		if (name.equals("s") || name.equals("o")) return null;
+		if (canonical.equals("gradient")) {
+			GradientArguments gradient = parseGradientArguments(tag, true);
+			if (gradient == null) return "";
+			StringBuilder opening = new StringBuilder("<gr type:").append(gradient.mode().name().toLowerCase(Locale.ROOT));
+			for (int color : gradient.colors()) opening.append(' ').append(LoreMarkupParser.formatHex(color));
+			return opening.append('>').toString();
+		}
+		if (canonical.equals("rainbow")) {
+			RainbowArguments rainbow = parseRainbowArguments(tag, true);
+			return rainbow == null ? "" : "<rb type:legacy_hsv f:" + rainbow.frequency() + " s:" + rainbow.saturation() + " o:" + rainbow.offset() + ">";
+		}
+		if (canonical.equals("c") || name.startsWith("#")) {
+			String value = canonical.equals("c") ? orderedOrNamedArgument(args, "value", 0) : name;
+			Integer color = value == null ? null : parseColor(value);
+			return color == null ? "" : "<c " + LoreMarkupParser.formatHex(color) + ">";
+		}
+		return isPairedFormattingTag(canonical) ? "<" + canonical + ">" : null;
+	}
+
 	private static final class Parser {
 		private final String input;
+		private final Migration migration;
+		private final StringBuilder markup = new StringBuilder();
+		private final List<Boolean> explicitColors = new ArrayList<>();
+		private int lineBreaks;
 		private final List<LoreLine> lines = new ArrayList<>();
 		private final List<LoreRun> currentRuns = new ArrayList<>();
 		private final List<Integer> colorStack = new ArrayList<>();
@@ -37,8 +118,9 @@ final class QuickTextFallbackParser {
 		private int strikethroughDepth;
 		private int obfuscatedDepth;
 
-		private Parser(String input) {
+		private Parser(String input, Migration migration) {
 			this.input = input;
+			this.migration = migration;
 			this.colorStack.add(LoreMarkupParser.DEFAULT_COLOR);
 		}
 
@@ -47,11 +129,15 @@ final class QuickTextFallbackParser {
 				Tag tag = readTagAt(input, index);
 				if (tag != null) {
 					if (tag.closing()) {
-						if (closingTag != null && (tag.name().isEmpty() || canonicalTagName(tag.name()).equals(canonicalTagName(closingTag)))) {
+						if (closingTag != null && (tag.name().isEmpty() || canonical(tag.name()).equals(canonical(closingTag)))) {
 							index = tag.endIndex();
 							return null;
 						}
-						return appendLiteralTag(tag);
+						ParseResult error = appendLiteralTag(tag);
+						if (error != null || migration == Migration.COMMON) {
+							return error;
+						}
+						continue;
 					}
 
 					ParseResult result = handleOpeningTag(tag);
@@ -96,8 +182,10 @@ final class QuickTextFallbackParser {
 
 			flushRun(currentColor(), currentFlags());
 			colorStack.add(rgb);
+			trace("<c " + LoreMarkupParser.formatHex(rgb) + ">");
 			index = tag.endIndex();
 			ParseResult result = parseUntil(tag.name());
+			trace("</c>");
 			flushRun(currentColor(), currentFlags());
 			if (colorStack.size() > 1) {
 				colorStack.remove(colorStack.size() - 1);
@@ -106,7 +194,7 @@ final class QuickTextFallbackParser {
 		}
 
 		private ParseResult handleGradientTag(Tag tag) {
-			GradientArguments arguments = parseGradientArguments(tag);
+			GradientArguments arguments = parseGradientArguments(tag, false);
 			if (arguments == null) {
 				return appendLiteralTag(tag);
 			}
@@ -116,18 +204,23 @@ final class QuickTextFallbackParser {
 				return appendLiteralTag(tag);
 			}
 
-			ParseResult parsedContent = QuickTextFallbackParser.parse(content.value());
-			if (!parsedContent.isSuccess()) {
-				return parsedContent;
+			Parser child = new Parser(content.value(), migration);
+			ParseResult error = child.parseUntil(null);
+			if (error != null) {
+				return error;
 			}
+			trace("<gr" + (arguments.mode() == GradientMode.OKLAB ? ""
+					: " type:" + arguments.mode().name().toLowerCase(Locale.ROOT)));
+			for (int rgb : arguments.colors()) trace(" " + LoreMarkupParser.formatHex(rgb));
+			trace(">" + child.markup + "</gr>");
 
 			index = content.endIndex();
 			flushRun(currentColor(), currentFlags());
-			return appendGradientDocument(parsedContent.document(), arguments.colors(), arguments.mode(), currentFlags());
+			return appendGradientDocument(child, arguments.colors(), arguments.mode(), currentFlags());
 		}
 
 		private ParseResult handleRainbowTag(Tag tag) {
-			RainbowArguments arguments = parseRainbowArguments(tag);
+			RainbowArguments arguments = parseRainbowArguments(tag, false);
 			if (arguments == null) {
 				return appendLiteralTag(tag);
 			}
@@ -137,19 +230,22 @@ final class QuickTextFallbackParser {
 				return appendLiteralTag(tag);
 			}
 
-			ParseResult parsedContent = QuickTextFallbackParser.parse(content.value());
-			if (!parsedContent.isSuccess()) {
-				return parsedContent;
+			Parser child = new Parser(content.value(), migration);
+			ParseResult error = child.parseUntil(null);
+			if (error != null) {
+				return error;
 			}
+			trace("<rb f:" + arguments.frequency() + " s:" + arguments.saturation() + " o:" + arguments.offset()
+					+ (arguments.legacy() ? " type:legacy_hsv" : "") + ">" + child.markup + "</rb>");
 
 			index = content.endIndex();
 			flushRun(currentColor(), currentFlags());
-			return appendRainbowDocument(parsedContent.document(), arguments, currentFlags());
+			return appendRainbowDocument(child, arguments, currentFlags());
 		}
 
 		private TaggedContent readTaggedContent(Tag tag) {
 			int contentStart = tag.endIndex();
-			int closeStart = findClosingTag(input, contentStart, canonicalTagName(tag.name()));
+			int closeStart = findClosingTag(input, contentStart, canonical(tag.name()), migration == Migration.COMMON);
 			if (closeStart < 0) {
 				// QuickText allows an omitted final closing tag. In that case the
 				// modifier consumes the remainder of the static input.
@@ -166,18 +262,24 @@ final class QuickTextFallbackParser {
 		private ParseResult handleFormatTag(Tag tag, int flag) {
 			flushRun(currentColor(), currentFlags());
 			addFlag(flag, 1);
+			trace("<" + tag.name() + ">");
 			index = tag.endIndex();
 			ParseResult result = parseUntil(tag.name());
+			trace("</" + tag.name() + ">");
 			flushRun(currentColor(), currentFlags());
 			addFlag(flag, -1);
 			return result;
 		}
 
-		private ParseResult appendGradientDocument(LoreDocument document, List<Integer> colors, GradientMode mode, int outerFlags) {
-			int count = Math.max(1, document.visibleCodePoints());
+		private ParseResult appendGradientDocument(Parser child, List<Integer> colors, GradientMode mode, int outerFlags) {
+			boolean legacy = mode.name().startsWith("LEGACY_");
+			LoreDocument document = child.buildDocument(!legacy);
+			int count = Math.max(1, child.visible + (legacy ? child.lineBreaks : 0));
 			int gradientIndex = 0;
+			int visibleIndex = 0;
 			for (int lineIndex = 0; lineIndex < document.lines().size(); lineIndex++) {
 				if (lineIndex > 0) {
+					if (legacy) gradientIndex++;
 					ParseResult error = addLineBreak();
 					if (error != null) {
 						return error;
@@ -188,23 +290,27 @@ final class QuickTextFallbackParser {
 					for (int offset = 0; offset < run.text().length();) {
 						int cp = run.text().codePointAt(offset);
 						offset += Character.charCount(cp);
-						int color = interpolate(colors, gradientIndex, count, mode);
-						ParseResult error = appendVisibleCodePoint(cp, color, outerFlags | run.flags());
+						int color = legacy && child.explicitColors.get(visibleIndex) ? run.rgb() : interpolate(colors, gradientIndex, count, mode);
+						ParseResult error = appendVisibleCodePoint(cp, color, outerFlags | run.flags(), true);
 						if (error != null) {
 							return error;
 						}
-						gradientIndex++;
+						gradientIndex += legacy && child.explicitColors.get(visibleIndex) ? Character.charCount(cp) : 1;
+						visibleIndex++;
 					}
 				}
 			}
 			return null;
 		}
 
-		private ParseResult appendRainbowDocument(LoreDocument document, RainbowArguments arguments, int outerFlags) {
-			int count = Math.max(1, document.visibleCodePoints());
+		private ParseResult appendRainbowDocument(Parser child, RainbowArguments arguments, int outerFlags) {
+			LoreDocument document = child.buildDocument(!arguments.legacy());
+			int count = Math.max(1, child.visible + (arguments.legacy() ? child.lineBreaks : 0));
 			int colorIndex = 0;
+			int visibleIndex = 0;
 			for (int lineIndex = 0; lineIndex < document.lines().size(); lineIndex++) {
 				if (lineIndex > 0) {
+					if (arguments.legacy()) colorIndex++;
 					ParseResult error = addLineBreak();
 					if (error != null) {
 						return error;
@@ -218,11 +324,16 @@ final class QuickTextFallbackParser {
 						double progress = count <= 1 ? 0.0 : (double) colorIndex / (double) (count - 1);
 						double hue = positiveModulo(arguments.offset() + progress * arguments.frequency(), 1.0);
 						int color = hsvToRgb(hue, arguments.saturation(), 1.0);
-						ParseResult error = appendVisibleCodePoint(cp, color, outerFlags | run.flags());
+						if (arguments.legacy()) {
+							color = child.explicitColors.get(visibleIndex) ? run.rgb()
+									: LegacyGradientColors.rainbow(colorIndex, count, arguments.frequency(), arguments.saturation(), arguments.offset());
+						}
+						ParseResult error = appendVisibleCodePoint(cp, color, outerFlags | run.flags(), true);
 						if (error != null) {
 							return error;
 						}
-						colorIndex++;
+						colorIndex += arguments.legacy() && child.explicitColors.get(visibleIndex) ? Character.charCount(cp) : 1;
+						visibleIndex++;
 					}
 				}
 			}
@@ -231,6 +342,7 @@ final class QuickTextFallbackParser {
 
 		private ParseResult appendLiteralTag(Tag tag) {
 			String literal = input.substring(index, tag.endIndex());
+			traceLiteral(literal);
 			index = tag.endIndex();
 			for (int i = 0; i < literal.length();) {
 				int cp = literal.codePointAt(i);
@@ -245,15 +357,18 @@ final class QuickTextFallbackParser {
 
 		private ParseResult appendLiteralAt(int sourceIndex) {
 			if (input.startsWith("\\<", sourceIndex)) {
+				traceLiteral("<");
 				index = sourceIndex + 2;
 				return appendVisibleCodePoint('<', currentColor(), currentFlags());
 			}
 			if (input.startsWith("\\\\", sourceIndex)) {
+				traceLiteral("\\");
 				index = sourceIndex + 2;
 				return appendVisibleCodePoint('\\', currentColor(), currentFlags());
 			}
 
 			int cp = input.codePointAt(sourceIndex);
+			traceLiteral(Character.toString(cp));
 			index = sourceIndex + Character.charCount(cp);
 			if (cp == '\n') {
 				return addLineBreak();
@@ -262,6 +377,11 @@ final class QuickTextFallbackParser {
 		}
 
 		private ParseResult appendVisibleCodePoint(int cp, int color, int flags) {
+			return appendVisibleCodePoint(cp, color, flags, colorStack.size() > 1);
+		}
+
+		private ParseResult appendVisibleCodePoint(int cp, int color, int flags, boolean explicitColor) {
+			explicitColors.add(explicitColor);
 			currentText.appendCodePoint(cp);
 			flushRun(color, flags);
 			visible++;
@@ -269,6 +389,18 @@ final class QuickTextFallbackParser {
 				return ParseResult.error("Lore is limited to 255 visible symbols.", visible);
 			}
 			return null;
+		}
+
+		private String canonical(String name) {
+			return migration == Migration.COMMON && name.equals("gr") ? "gr" : canonicalTagName(name);
+		}
+
+		private void trace(String value) {
+			if (migration != Migration.NONE) markup.append(value);
+		}
+
+		private void traceLiteral(String value) {
+			if (migration != Migration.NONE) markup.append(value.replace("\\", "\\\\").replace("<", "\\<"));
 		}
 
 		private void flushRun(int color, int flags) {
@@ -291,6 +423,7 @@ final class QuickTextFallbackParser {
 		}
 
 		private ParseResult addLineBreak() {
+			lineBreaks++;
 			flushRun(currentColor(), currentFlags());
 			lines.add(new LoreLine(List.copyOf(currentRuns)));
 			currentRuns.clear();
@@ -302,9 +435,13 @@ final class QuickTextFallbackParser {
 		}
 
 		private LoreDocument buildDocument() {
+			return buildDocument(true);
+		}
+
+		private LoreDocument buildDocument(boolean trimTrailing) {
 			flushRun(currentColor(), currentFlags());
 			lines.add(new LoreLine(List.copyOf(currentRuns)));
-			return new LoreDocument(trimTrailingEmptyLines(lines), visible);
+			return new LoreDocument(trimTrailing ? trimTrailingEmptyLines(lines) : List.copyOf(lines), visible);
 		}
 
 		private int currentColor() {
@@ -375,7 +512,7 @@ final class QuickTextFallbackParser {
 		return new Tag(parts.getFirst().toLowerCase(Locale.ROOT), List.copyOf(parts.subList(1, parts.size())), closing, end + 1);
 	}
 
-	private static int findClosingTag(String input, int start, String outerName) {
+	private static int findClosingTag(String input, int start, String outerName, boolean legacyCommon) {
 		List<String> stack = new ArrayList<>();
 		stack.add(outerName);
 		for (int i = start; i < input.length(); i++) {
@@ -384,7 +521,7 @@ final class QuickTextFallbackParser {
 				continue;
 			}
 
-			String name = canonicalTagName(tag.name());
+			String name = legacyCommon && tag.name().equals("gr") ? "gr" : canonicalTagName(tag.name());
 			if (!tag.closing()) {
 				if (isPairedFormattingTag(name)) {
 					stack.add(name);
@@ -470,14 +607,36 @@ final class QuickTextFallbackParser {
 		return Integer.parseInt(hex, 16);
 	}
 
-	private static GradientArguments parseGradientArguments(Tag tag) {
+	private static GradientArguments parseGradientArguments(Tag tag, boolean legacyFabric) {
 		List<Integer> colors = new ArrayList<>();
 		GradientMode mode = tag.name().equals("hgr") || tag.name().equals("hard_gradient")
 				? GradientMode.HARD
 				: GradientMode.OKLAB;
+		if (legacyFabric) {
+			// The historical dependency spelled HSV "hvs"; "hsv" and unknown
+			// named modes fell back to OKLab. Positional mode words were colors.
+			String type = namedArgument(tag.args(), "type");
+			if (mode != GradientMode.HARD) mode = "hvs".equals(type) ? GradientMode.HSV
+					: "hard".equals(type) ? GradientMode.HARD : GradientMode.OKLAB;
+			for (String arg : orderedArguments(tag.args())) {
+				Integer color = parseColor(arg);
+				if (color != null) colors.add(color);
+			}
+			if (colors.size() == 1) colors.add(colors.getFirst());
+			return colors.size() < 2 ? null : new GradientArguments(List.copyOf(colors),
+					GradientMode.valueOf("LEGACY_" + mode.name()));
+		}
 		for (String rawArg : tag.args()) {
 			String arg = unwrap(rawArg);
 			String lower = arg.toLowerCase(Locale.ROOT);
+			if (lower.startsWith("type:legacy_")) {
+				try {
+					mode = GradientMode.valueOf(lower.substring(5).toUpperCase(Locale.ROOT));
+					continue;
+				} catch (IllegalArgumentException ignored) {
+					return null;
+				}
+			}
 			if (lower.equals("hard") || lower.equals("type:hard")) {
 				mode = GradientMode.HARD;
 				continue;
@@ -500,7 +659,7 @@ final class QuickTextFallbackParser {
 		return colors.size() < 2 ? null : new GradientArguments(List.copyOf(colors), mode);
 	}
 
-	private static RainbowArguments parseRainbowArguments(Tag tag) {
+	private static RainbowArguments parseRainbowArguments(Tag tag, boolean legacyFabric) {
 		Double frequency = numericArgument(tag.args(), "frequency", "f", 0, 1.0);
 		Double saturation = numericArgument(tag.args(), "saturation", "s", 1, 1.0);
 		Double offset = numericArgument(tag.args(), "offset", "o", 2, 0.0);
@@ -510,7 +669,8 @@ final class QuickTextFallbackParser {
 		if (!withinUnitInterval(frequency) || !withinUnitInterval(saturation) || !withinUnitInterval(offset)) {
 			return null;
 		}
-		return new RainbowArguments(frequency, saturation, offset);
+		return new RainbowArguments(frequency, saturation, offset,
+				legacyFabric || "legacy_hsv".equalsIgnoreCase(namedArgument(tag.args(), "type")));
 	}
 
 	private static Double numericArgument(List<String> args, String longName, String shortName, int orderedIndex, double fallback) {
@@ -575,7 +735,7 @@ final class QuickTextFallbackParser {
 	private static String canonicalTagName(String tagName) {
 		return switch (tagName) {
 			case "color" -> "c";
-			case "gradient", "hgr", "hard_gradient" -> "gradient";
+			case "gr", "gradient", "hgr", "hard_gradient" -> "gradient";
 			case "rb" -> "rainbow";
 			case "bold" -> "b";
 			case "italic" -> "i";
@@ -587,6 +747,9 @@ final class QuickTextFallbackParser {
 	}
 
 	private static int interpolate(List<Integer> colors, int index, int count, GradientMode mode) {
+		if (mode.name().startsWith("LEGACY_")) {
+			return LegacyGradientColors.gradient(colors, index, count, mode.name().substring(7).toLowerCase(Locale.ROOT));
+		}
 		if (colors.size() == 1 || count <= 1) {
 			return colors.getFirst();
 		}
@@ -598,6 +761,7 @@ final class QuickTextFallbackParser {
 			case HARD -> colors.get(Math.min(colors.size() - 1, (int) Math.round(scaled)));
 			case HSV -> interpolateHsv(colors.get(segment), colors.get(segment + 1), t);
 			case OKLAB -> interpolateOklab(colors.get(segment), colors.get(segment + 1), t);
+			default -> throw new IllegalArgumentException("Unknown interpolation mode: " + mode);
 		};
 	}
 
@@ -755,12 +919,15 @@ final class QuickTextFallbackParser {
 	private enum GradientMode {
 		OKLAB,
 		HSV,
-		HARD
+		HARD,
+		LEGACY_OKLAB,
+		LEGACY_HSV,
+		LEGACY_HARD
 	}
 
 	private record GradientArguments(List<Integer> colors, GradientMode mode) {
 	}
 
-	private record RainbowArguments(double frequency, double saturation, double offset) {
+	private record RainbowArguments(double frequency, double saturation, double offset, boolean legacy) {
 	}
 }

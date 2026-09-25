@@ -17,6 +17,7 @@
     "EntityItemTextMixin",
     "EntityTypeItemTextMixin",
     "ItemUtilsBucketItemTextMixin",
+    "ItemStackStackingMixin",
     "MilkBucketItemTextMixin",
     "NameTagItemTextMixin",
     "SolidBucketItemTextMixin",

@@ -46,6 +46,7 @@ Better Lore adds a survival-friendly extension to the anvil. You can now create 
 - Pick colors with RGB sliders, direct hex input, or a color wheel.
 - Randomize the currently selected color with the dice button.
 - Keep Better Lore entries separate from other mods' lore; only Better Lore-owned lines are editable here.
+- Migrate earlier Better Lore names and lore while retaining their formatting and editable gradients across loaders.
 - Preserve exact Better Lore name markup and all lore when boats, minecarts, armor stands, or bucketable mobs make an item/entity/item round trip.
 - Keep Better Lore text on water, lava, milk, and powder-snow buckets while they are emptied/refilled; mob buckets show the contained mob's text while privately retaining the bucket's own text for release.
 - Preserve exact Better Lore names and lore when copper golems become statues and later awaken or drop again.
@@ -54,6 +55,10 @@ Better Lore adds a survival-friendly extension to the anvil. You can now create 
 - Layout compatibility with JEI and REI.
 
 ## QuickText examples
+
+Fabric, Forge, and NeoForge use the same built-in formatting parser. No Text
+Placeholder API installation is required. See [formatting behavior](docs/formatting.md)
+for supported tags and gradient modes.
 
 Tags used:
 
@@ -88,12 +93,12 @@ Tags used:
 
 ### Requirements
 
-- Minecraft Java Edition 26.1.2
-- Fabric Loader
-- Fabric API
-- Text Placeholder API
+- A supported Minecraft Java Edition version (see the compatibility releases below)
+- Fabric Loader, Forge, or NeoForge for that version
+- Fabric API when using Fabric
 
-Fabric API and Text Placeholder API are required dependencies. Install them alongside Better Lore.
+Better Lore handles formatting internally on every loader. Other mods may still
+require Text Placeholder API; its presence does not change Better Lore's parser.
 
 ### Compatibility releases
 

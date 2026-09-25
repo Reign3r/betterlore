@@ -30,7 +30,7 @@ class LoreMarkupParserTest {
 	}
 
 	@Test
-	void quickTextGradientUsesLibraryOutputWithoutCountingTags() {
+	void quickTextGradientUsesSharedParserWithoutCountingTags() {
 		ParseResult result = LoreMarkupParser.parse("<gr #ff6600 #aa1208>fire</gr>");
 
 		assertTrue(result.isSuccess());

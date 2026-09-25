@@ -59,9 +59,6 @@ val prepareLoaderJava by tasks.registering(Sync::class) {
     from(loaderPreparedJava)
     into(layout.buildDirectory.dir("generated/processed-loader-java"))
 }
-val placeholderApiDependency = project.property("deps.placeholder_api").toString().let { value ->
-    if (value.count { it == ':' } >= 2) value else "eu.pb4:placeholder-api:$value"
-}
 val jeiMinecraftVersion = project.findProperty("deps.jei_minecraft")?.toString()
     ?: project.property("deps.minecraft").toString()
 val usesModernUnmappedLoom = project.property("deps.minecraft").toString().startsWith("26.")
@@ -75,12 +72,10 @@ dependencies {
         // mappings artifact; this matches the proven 26.1.2 baseline.
         implementation("net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
         implementation("net.fabricmc.fabric-api:fabric-api:${property("deps.fabric_api")}")
-        implementation(placeholderApiDependency)
     } else {
         add("mappings", loomExtension.officialMojangMappings())
         add("modImplementation", "net.fabricmc:fabric-loader:${property("deps.fabric_loader")}")
         add("modImplementation", "net.fabricmc.fabric-api:fabric-api:${property("deps.fabric_api")}")
-        add("modImplementation", placeholderApiDependency)
     }
     if (jeiApiAvailable) {
         val jeiApi = "mezz.jei:jei-$jeiMinecraftVersion-fabric-api:$jeiVersion"
@@ -146,7 +141,6 @@ tasks.processResources {
         "minecraft_version" to project.property("deps.minecraft").toString(),
         "fabric_loader_version" to project.property("deps.fabric_loader").toString(),
         "fabric_api_version" to project.property("deps.fabric_api").toString(),
-        "placeholder_api_version" to project.property("placeholder_api_version").toString(),
         "resource_pack_format" to project.property("minecraft.resource_pack_format").toString(),
         "resource_pack_minor" to project.property("minecraft.resource_pack_minor").toString(),
         "java_version" to project.property("java.version").toString(),

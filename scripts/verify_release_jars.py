@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Verify the collected Better Lore release jars are structurally deployable.
+"""Verify Better Lore release structure and execute packaged parser regressions.
 
 ``collect_release_jars.py`` proves that a complete, deterministic set of
 remapped/reobfuscated jars was selected.  This verifier is deliberately a
 second step: it opens every collected archive and checks the metadata and
-runtime-discovery resources that a mod loader will use after publication.
+runtime-discovery resources that a mod loader will use after publication, then
+executes parsing and migration from the public archives in isolated JVM loaders.
 """
 
 from __future__ import annotations
@@ -15,8 +16,11 @@ from dataclasses import dataclass
 import hashlib
 from io import BytesIO
 import json
+import os
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 import tempfile
 from typing import Any, Mapping
@@ -36,6 +40,8 @@ from release_matrix import (
     FABRIC_FAMILIES,
     FAMILIES_BY_LOADER,
     PublishedArtifact,
+    artifact_for_runtime,
+    family_for_runtime,
     fabric_inner_path,
     published_artifacts,
     validate_release_matrix,
@@ -51,7 +57,7 @@ MIXIN_CONFIGURATION = "better_lore.mixins.json"
 
 SERVER_NETWORKING_SERVICE = "com.reign.betterlore.net.BetterLoreNetworkingPlatform"
 CLIENT_NETWORKING_SERVICE = "com.reign.betterlore.client.net.BetterLoreClientNetworkingPlatform"
-QUICKTEXT_PARSER_SERVICE = "com.reign.betterlore.lore.quicktext.QuickTextParserAdapter"
+_RETIRED_PARSER_SERVICE = "META-INF/services/com.reign.betterlore.lore.quicktext.QuickTextParserAdapter"
 JEI_PLUGIN_CLASS = "com.reign.betterlore.compat.jei.BetterLoreJeiPlugin"
 JEI_PLUGIN_CLASS_PATH = JEI_PLUGIN_CLASS.replace(".", "/") + ".class"
 _JEI_COMPATIBILITY_MIXIN_CLASS = (
@@ -273,9 +279,8 @@ _IDENTIFIER_RETURN = "()Lnet/minecraft/resources/Identifier;"
 
 # These are an intentional part of the release contract.  Requiring exactly
 # one implementation avoids ServiceLoader's first-provider-wins behaviour from
-# changing with an accidentally bundled or stale service declaration.  Forge
-# and NeoForge use the clean-room parser fallback, so only Fabric supplies the
-# optional Placeholder API adapter.
+# changing with an accidentally bundled or stale service declaration. Formatting
+# uses the same built-in parser on every loader and has no service provider.
 EXPECTED_SERVICE_PROVIDERS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
     "fabric": {
         SERVER_NETWORKING_SERVICE: (
@@ -283,9 +288,6 @@ EXPECTED_SERVICE_PROVIDERS: Mapping[str, Mapping[str, tuple[str, ...]]] = {
         ),
         CLIENT_NETWORKING_SERVICE: (
             "com.reign.betterlore.client.net.fabric.FabricBetterLoreClientNetworkingPlatform",
-        ),
-        QUICKTEXT_PARSER_SERVICE: (
-            "com.reign.betterlore.lore.quicktext.fabric.FabricPlaceholderApiQuickTextAdapter",
         ),
     },
     "forge": {
@@ -713,6 +715,35 @@ def _validate_service_providers(
             )
 
 
+def _validate_independent_parser(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    """Reject stale dependency metadata, bundled API classes, and parser adapters."""
+    if _RETIRED_PARSER_SERVICE in names:
+        errors.append(f"{archive_label}: retired parser ServiceLoader declaration is present")
+    for name in sorted(names):
+        if name.endswith(".class"):
+            data = archive.read(name)
+            if (name.startswith("eu/pb4/placeholders/")
+                    or b"eu/pb4/placeholders/" in data
+                    or b"eu.pb4.placeholders." in data
+                    or b"QuickTextParserAdapter" in data):
+                errors.append(f"{archive_label}: {name} still contains Placeholder API/parser adapter references")
+    if "fabric.mod.json" in names:
+        try:
+            descriptor = json.loads(archive.read("fabric.mod.json"))
+        except (ValueError, UnicodeDecodeError):
+            return  # The descriptor validator reports malformed JSON separately.
+        if isinstance(descriptor, dict):
+            for key in ("depends", "recommends", "suggests", "breaks", "conflicts"):
+                entries = descriptor.get(key, {})
+                if isinstance(entries, dict) and "placeholder-api" in entries:
+                    errors.append(f"{archive_label}: fabric.mod.json {key} still declares placeholder-api")
+
+
 def _validate_archive(
     path: Path,
     artifact: Artifact,
@@ -736,6 +767,7 @@ def _validate_archive(
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             names = {info.filename for info in infos}
+            _validate_independent_parser(archive, names, errors, archive_label)
             duplicates = sorted(name for name, count in Counter(info.filename for info in infos).items() if count > 1)
             if duplicates:
                 rendered = ", ".join(duplicates[:5])
@@ -996,6 +1028,7 @@ def _validate_fabric_bundle(
         with zipfile.ZipFile(path) as archive:
             infos = archive.infolist()
             names = {info.filename for info in infos}
+            _validate_independent_parser(archive, names, errors, label)
             duplicates = sorted(
                 name for name, count in Counter(info.filename for info in infos).items() if count > 1
             )
@@ -1217,6 +1250,7 @@ class _ClassfilePool:
     integer_constants: dict[int, int]
     name_and_types: dict[int, tuple[int, int]]
     method_references: dict[int, tuple[int, int]]
+    field_references: dict[int, tuple[int, int]]
     end: int
 
 
@@ -1237,6 +1271,9 @@ class _ClassfileDeclaration:
     method_signatures: dict[tuple[str, str], str]
     attributes: frozenset[str]
     inner_class_access: dict[str, int]
+    super_class: str | None
+    nest_host: str | None
+    nest_members: tuple[str, ...]
 
 
 def _classfile_pool(data: bytes) -> _ClassfilePool:
@@ -1249,6 +1286,7 @@ def _classfile_pool(data: bytes) -> _ClassfilePool:
     integer_constants: dict[int, int] = {}
     name_and_types: dict[int, tuple[int, int]] = {}
     method_references: dict[int, tuple[int, int]] = {}
+    field_references: dict[int, tuple[int, int]] = {}
     fixed_sizes = {
         3: 4,
         4: 4,
@@ -1297,8 +1335,9 @@ def _classfile_pool(data: bytes) -> _ClassfilePool:
                 class_name_indexes[index] = int.from_bytes(
                     data[offset : offset + 2], "big"
                 )
-            elif tag in (10, 11):
-                method_references[index] = (
+            elif tag in (9, 10, 11):
+                references = field_references if tag == 9 else method_references
+                references[index] = (
                     int.from_bytes(data[offset : offset + 2], "big"),
                     int.from_bytes(data[offset + 2 : offset + 4], "big"),
                 )
@@ -1318,6 +1357,7 @@ def _classfile_pool(data: bytes) -> _ClassfilePool:
         integer_constants,
         name_and_types,
         method_references,
+        field_references,
         offset,
     )
 
@@ -1378,6 +1418,8 @@ def _classfile_declaration(data: bytes) -> _ClassfileDeclaration:
     this_class = _pool_class_name(
         pool, int.from_bytes(data[offset + 2 : offset + 4], "big"), "this"
     )
+    super_index = int.from_bytes(data[offset + 4 : offset + 6], "big")
+    super_class = _pool_class_name(pool, super_index, "super") if super_index else None
     offset += 6  # access flags, this class, super class
     interface_count = int.from_bytes(data[offset : offset + 2], "big")
     offset += 2
@@ -1464,7 +1506,20 @@ def _classfile_declaration(data: bytes) -> _ClassfileDeclaration:
     if offset != len(data):
         raise ValueError("unexpected data after Java class attributes")
     inner_class_access: dict[str, int] = {}
+    nest_host: str | None = None
+    nest_members: tuple[str, ...] = ()
     for attribute_name, payload in class_attributes:
+        if attribute_name == "NestHost":
+            if len(payload) != 2:
+                raise ValueError("invalid Java NestHost attribute")
+            nest_host = _pool_class_name(pool, int.from_bytes(payload, "big"), "nest host")
+        if attribute_name == "NestMembers":
+            if len(payload) < 2 or len(payload) != 2 + 2 * int.from_bytes(payload[:2], "big"):
+                raise ValueError("invalid Java NestMembers attribute")
+            nest_members = tuple(
+                _pool_class_name(pool, int.from_bytes(payload[index:index + 2], "big"), "nest member")
+                for index in range(2, len(payload), 2)
+            )
         if attribute_name != "InnerClasses":
             continue
         if len(payload) < 2:
@@ -1489,6 +1544,9 @@ def _classfile_declaration(data: bytes) -> _ClassfileDeclaration:
         method_signatures,
         frozenset(name for name, _ in class_attributes),
         inner_class_access,
+        super_class,
+        nest_host,
+        nest_members,
     )
 
 
@@ -1528,12 +1586,17 @@ def _classfile_methods(data: bytes) -> tuple[int, set[tuple[str, str]]]:
 
 
 def _classfile_method_references(data: bytes) -> set[tuple[str, str, str]]:
+    return _classfile_member_references(data, fields=False)
+
+
+def _classfile_member_references(data: bytes, *, fields: bool) -> set[tuple[str, str, str]]:
     pool = _classfile_pool(data)
     references: set[tuple[str, str, str]] = set()
-    for class_index, name_and_type_index in pool.method_references.values():
+    members = pool.field_references if fields else pool.method_references
+    for class_index, name_and_type_index in members.values():
         name_and_type = pool.name_and_types.get(name_and_type_index)
         if name_and_type is None:
-            raise ValueError("invalid Java method NameAndType index")
+            raise ValueError("invalid Java member NameAndType index")
         references.add(
             (
                 _pool_class_name(pool, class_index, "method owner"),
@@ -2287,6 +2350,116 @@ def _validate_better_lore_structural_references(
         )
 
 
+def _validate_better_lore_access(
+    archive: zipfile.ZipFile,
+    names: set[str],
+    errors: list[str],
+    archive_label: str,
+) -> None:
+    """Check mod-internal member/inheritance access after package relocation.
+
+    Resolve inherited members against their declaring class. Metadata-only
+    class references (e.g. InnerClasses or generic signatures) are deliberately
+    not treated as executable accesses. External Minecraft/loader hierarchies
+    remain the JVM's responsibility; the packaged execution tests complement
+    these checks rather than treating this as a complete bytecode verifier.
+    """
+    declarations: dict[str, _ClassfileDeclaration] = {}
+    members: dict[str, list[tuple[bool, str, str, str]]] = {}
+    for path in sorted(names):
+        if not path.startswith(_BETTER_LORE_INTERNAL_PREFIX) or not path.endswith(".class"):
+            continue
+        try:
+            data = archive.read(path)
+            declaration = _classfile_declaration(data)
+            declarations[declaration.this_class] = declaration
+            members[declaration.this_class] = [
+                (fields, owner, name, descriptor)
+                for fields in (False, True)
+                for owner, name, descriptor in sorted(_classfile_member_references(data, fields=fields))
+            ]
+        except (KeyError, ValueError) as error:
+            errors.append(f"{archive_label}: cannot check Java access in {path}: {error}")
+
+    def package(name: str) -> str:
+        return name.rpartition("/")[0]
+
+    def nest(name: str) -> str | None:
+        declaration = declarations[name]
+        host_name = declaration.nest_host or name
+        host = declarations.get(host_name)
+        if host is None or host.nest_host is not None or package(host_name) != package(name):
+            return None
+        return host_name if host_name == name or name in host.nest_members else None
+
+    def resolve(owner: str, key: tuple[str, str], fields: bool, seen: set[str]):
+        if owner in seen or owner not in declarations:
+            return None
+        seen.add(owner)
+        declaration = declarations[owner]
+        table = declaration.fields if fields else declaration.methods
+        if key in table:
+            value = table[key]
+            return owner, value.access_flags if fields else value
+        if key[0] == "<init>":
+            return None
+        parents = (declaration.super_class,) + declaration.interfaces
+        if fields:
+            parents = declaration.interfaces + (declaration.super_class,)
+        for parent in parents:
+            result = resolve(parent, key, fields, seen) if parent else None
+            if result is not None:
+                return result
+        return None
+
+    def subclass(source: str, target: str) -> bool:
+        seen: set[str] = set()
+        while source and source not in seen:
+            if source == target:
+                return True
+            seen.add(source)
+            declaration = declarations.get(source)
+            source = declaration.super_class if declaration else None
+        return False
+
+    violations: set[str] = set()
+    for source, declaration in declarations.items():
+        source_nest = nest(source)
+        if declaration.nest_host is not None and source_nest is None:
+            violations.add(f"{source}: invalid nest host {declaration.nest_host}")
+        for member in declaration.nest_members:
+            if member not in declarations or declarations[member].nest_host != source or nest(member) != source:
+                violations.add(f"{source}: invalid nest member {member}")
+
+        owners = {owner for _, owner, _, _ in members.get(source, [])}
+        owners.update(declaration.interfaces)
+        if declaration.super_class:
+            owners.add(declaration.super_class)
+        for owner in owners:
+            target = declarations.get(owner)
+            if target and package(source) != package(owner) and not target.access_flags & _ACC_PUBLIC:
+                violations.add(f"{source} -> inaccessible class {owner}")
+
+        for fields, owner, name, descriptor in members.get(source, []):
+            resolved = resolve(owner, (name, descriptor), fields, set())
+            if resolved is None:
+                continue
+            declaring, access = resolved
+            if access & _ACC_PUBLIC:
+                continue
+            if access & _ACC_PRIVATE:
+                allowed = source == declaring or (source_nest is not None and source_nest == nest(declaring))
+            else:
+                allowed = package(source) == package(declaring)
+                if access & _ACC_PROTECTED:
+                    allowed |= subclass(source, declaring)
+            if not allowed:
+                kind = "field" if fields else "method"
+                violations.add(f"{source} -> inaccessible {kind} {declaring}.{name}{descriptor}")
+    if violations:
+        errors.append(f"{archive_label}: illegal Better Lore access after relocation:\n" + "\n".join(sorted(violations)))
+
+
 def _validate_adapter_classfiles(
     archive: zipfile.ZipFile,
     names: set[str],
@@ -2298,6 +2471,7 @@ def _validate_adapter_classfiles(
     _validate_better_lore_structural_references(
         archive, names, errors, archive_label
     )
+    _validate_better_lore_access(archive, names, errors, archive_label)
     invalid_classfiles: list[str] = []
     too_new: list[tuple[str, int]] = []
     for class_path in sorted(name for name in names if name.endswith(".class")):
@@ -2782,6 +2956,7 @@ def _validate_manifest_v2(
 def verify_release_jars(
     root: Path = ROOT,
     release_directory: Path | None = None,
+    java_home: Path | None = None,
 ) -> tuple[VerifiedArtifact, ...]:
     """Validate the declared compatibility release and all 52 target mappings."""
 
@@ -2868,7 +3043,52 @@ def verify_release_jars(
         raise ReleaseJarVerificationError(
             f"release jar verification saw {len(verified)} artifacts, expected {len(artifacts)}"
         )
+    _verify_packaged_parser(root, release, mod_version, java_home)
     return tuple(verified)
+
+
+def _verify_packaged_parser(root: Path, release: Path, mod_version: str, java_home: Path | None) -> None:
+    """Exercise the selected implementation from the public jars for every target."""
+    configured_home = java_home or (Path(os.environ["JAVA_HOME"]) if os.environ.get("JAVA_HOME") else None)
+    java = str(configured_home / "bin" / ("java.exe" if os.name == "nt" else "java")) if configured_home else shutil.which("java")
+    if java is None:
+        raise ReleaseJarVerificationError("Packaged parser checks require a JDK; set JAVA_HOME or --java-home.")
+    engine = "com/reign/betterlore/lore/quicktext/QuickTextLoreEngine"
+    with tempfile.TemporaryDirectory(prefix="better-lore-packaged-parser-") as directory:
+        temporary = Path(directory)
+        rows: list[str] = []
+        for target in declared_artifacts():
+            artifact = artifact_for_runtime(target.loader, target.minecraft)
+            family = family_for_runtime(target.loader, target.minecraft)
+            jar = release / artifact.file_name(mod_version)
+            selected_engine = engine
+            with zipfile.ZipFile(jar) as archive:
+                if artifact.strategy == "fabric_bundle":
+                    nested = fabric_inner_path(family)
+                    selected_jar = temporary / Path(nested).name
+                    if not selected_jar.exists():
+                        selected_jar.write_bytes(archive.read(nested))
+                else:
+                    selected_jar = jar
+                    generated = (
+                        f"com/reign/betterlore/compat/generated/{target.loader}/{_adapter_family_id(family)}/"
+                        "lore/quicktext/QuickTextLoreEngine"
+                    )
+                    if generated + ".class" in archive.namelist():
+                        selected_engine = generated
+            rows.append("\t".join((f"{target.loader}/{target.minecraft}", str(selected_jar), selected_engine.replace("/", "."))))
+        targets = temporary / "targets.tsv"
+        targets.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        try:
+            result = subprocess.run(
+                [java, "-Xmx256m", "--source", "21", str(root / "scripts/java/PackagedParserCheck.java"), str(targets)],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ReleaseJarVerificationError(f"Packaged parser execution failed: {error}") from error
+        if result.returncode:
+            raise ReleaseJarVerificationError("Packaged parser regression failed:\n" + result.stdout + result.stderr)
+        print(result.stdout.strip())
 
 
 def _write_synthetic_fabric_jar(
@@ -2929,6 +3149,10 @@ def _synthetic_classfile(
     references: tuple[str, ...] = (),
     method_references: tuple[tuple[str, str, str], ...] = (),
     utf8_constants: tuple[str, ...] = (),
+    field_references: tuple[tuple[str, str, str], ...] = (),
+    super_name: str = "java/lang/Object",
+    nest_host: str | None = None,
+    nest_members: tuple[str, ...] = (),
 ) -> bytes:
     """Build the small classfile subset consumed by the dependency-free parser."""
 
@@ -2970,22 +3194,24 @@ def _synthetic_classfile(
         )
         return len(constants)
 
-    def add_method_reference(owner: str, name: str, descriptor: str) -> None:
+    def add_member_reference(owner: str, name: str, descriptor: str, tag: bytes) -> None:
         owner_index = add_class(owner)
         name_and_type_index = add_name_and_type(name, descriptor)
         constants.append(
-            b"\x0a"
+            tag
             + owner_index.to_bytes(2, "big")
             + name_and_type_index.to_bytes(2, "big")
         )
 
     this_class = add_class(internal_name)
-    super_class = add_class("java/lang/Object")
+    super_class = add_class(super_name)
     interface_indexes = [add_class(interface) for interface in interfaces]
     for reference in references:
         add_class(reference)
     for owner, name, descriptor in method_references:
-        add_method_reference(owner, name, descriptor)
+        add_member_reference(owner, name, descriptor, b"\x0a")
+    for owner, name, descriptor in field_references:
+        add_member_reference(owner, name, descriptor, b"\x09")
     for value in utf8_constants:
         add_utf8(value)
 
@@ -3014,6 +3240,13 @@ def _synthetic_classfile(
     ) else None
 
     class_attributes: list[tuple[int, bytes]] = []
+    if nest_host is not None:
+        class_attributes.append((add_utf8("NestHost"), add_class(nest_host).to_bytes(2, "big")))
+    if nest_members:
+        payload = len(nest_members).to_bytes(2, "big") + b"".join(
+            add_class(member).to_bytes(2, "big") for member in nest_members
+        )
+        class_attributes.append((add_utf8("NestMembers"), payload))
     if record:
         class_attributes.append((add_utf8("Record"), b"\x00\x00"))
     if inner_class is not None:
@@ -3365,6 +3598,24 @@ def _run_self_test() -> int:
         if valid_errors:
             print("SELF-TEST ERROR: valid synthetic jar was rejected:\n" + "\n".join(valid_errors), file=sys.stderr)
             return 1
+
+        for name, entries in (
+            ("metadata", {"fabric.mod.json": json.dumps({"depends": {"placeholder-api": "*"}}).encode()}),
+            ("bundled-api", {"eu/pb4/placeholders/Example.class": _synthetic_classfile("eu/pb4/placeholders/Example", set())}),
+            ("api-reference", {"example/Parser.class": _synthetic_classfile("example/Parser", set(), references=("eu/pb4/placeholders/api/parsers/NodeParser",))}),
+            ("retired-service", {_RETIRED_PARSER_SERVICE: b"example.Parser\n"}),
+            ("retired-adapter", {"example/Parser.class": _synthetic_classfile("example/Parser", set(), references=("com/reign/betterlore/lore/quicktext/QuickTextParserAdapter",))}),
+        ):
+            obsolete = directory / f"obsolete-{name}.jar"
+            with zipfile.ZipFile(obsolete, "w") as archive:
+                for resource, data in entries.items():
+                    archive.writestr(resource, data)
+            parser_errors: list[str] = []
+            with zipfile.ZipFile(obsolete) as archive:
+                _validate_independent_parser(archive, set(archive.namelist()), parser_errors, obsolete.name)
+            if not parser_errors:
+                print(f"SELF-TEST ERROR: obsolete parser {name} was not rejected", file=sys.stderr)
+                return 1
 
         no_jei = directory / "no-jei.jar"
         _write_synthetic_fabric_jar(no_jei, include_jei=False)
@@ -3846,16 +4097,17 @@ def main() -> int:
         action="store_true",
         help="Run a dependency-free synthetic archive smoke test.",
     )
+    parser.add_argument("--java-home", type=Path, help="JDK used to execute the packaged parser checks (defaults to JAVA_HOME or PATH).")
     args = parser.parse_args()
     if args.self_test:
         return _run_self_test()
 
     try:
-        records = verify_release_jars(release_directory=args.release_dir)
+        records = verify_release_jars(release_directory=args.release_dir, java_home=args.java_home)
     except ReleaseJarVerificationError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    print(f"Verified {len(records)} structurally valid release jar(s) in {ROOT / 'build' / RELEASE_DIRECTORY_NAME}")
+    print(f"Verified {len(records)} release jar(s), including packaged parser execution, in {ROOT / 'build' / RELEASE_DIRECTORY_NAME}")
     return 0
 
 
