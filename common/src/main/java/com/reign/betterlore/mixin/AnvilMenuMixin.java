@@ -8,6 +8,7 @@ import com.reign.betterlore.lore.LoreDocument;
 import com.reign.betterlore.lore.LoreMarkupDecompiler;
 import com.reign.betterlore.lore.LoreMarkupParser;
 import com.reign.betterlore.lore.ParseResult;
+import com.reign.betterlore.lore.quicktext.EditorMarkup;
 import com.reign.betterlore.net.AnvilLoreNetworking;
 import com.reign.betterlore.net.ClientboundAnvilLoreStatePayload;
 import net.minecraft.core.component.DataComponents;
@@ -307,6 +308,15 @@ public abstract class AnvilMenuMixin implements AnvilLoreMenuBridge {
 			return customName == null;
 		}
 
-		return customName != null && rawNameMarkup.equals(customName.getString());
+		if (customName == null) {
+			return false;
+		}
+
+		// The client edits a projected form of Better Lore markup. Vanilla sees
+		// that projection as a literal rename and stores it in CUSTOM_NAME before
+		// the Better Lore packet arrives. Treat both forms as the same vanilla
+		// echo so the parsed result replaces it.
+		return rawNameMarkup.equals(customName.getString())
+				|| EditorMarkup.visibleText(rawNameMarkup).equals(customName.getString());
 	}
 }
